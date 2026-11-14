@@ -13,6 +13,8 @@ export default function ChartBuilder({ file, columns }: { file: File; columns: {
   const [aggregation, setAggregation] = useState('sum')
   const [filterColumn, setFilterColumn] = useState('')
   const [filterValue, setFilterValue] = useState('')
+  const [filterMin, setFilterMin] = useState('')
+  const [filterMax, setFilterMax] = useState('')
   const [result, setResult] = useState<ChartResult | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -29,6 +31,8 @@ export default function ChartBuilder({ file, columns }: { file: File; columns: {
       form.append('aggregation', aggregation)
       form.append('filter_column', filterColumn)
       form.append('filter_value', filterValue)
+      form.append('filter_min', filterMin)
+      form.append('filter_max', filterMax)
       const response = await fetch(`${API_URL}/api/v1/datasets/chart`, { method: 'POST', body: form })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Could not generate chart.')
@@ -63,7 +67,9 @@ export default function ChartBuilder({ file, columns }: { file: File; columns: {
       <label className="text-xs text-zinc-400">Y-axis / value<select value={yColumn} onChange={event => setYColumn(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white"><option value="">Count records</option>{numericColumns.map(column => <option key={column} value={column}>{column}</option>)}</select></label>
       <label className="text-xs text-zinc-400">Aggregation<select value={aggregation} onChange={event => setAggregation(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white"><option value="sum">Sum</option><option value="mean">Average</option><option value="median">Median</option><option value="count">Count</option></select></label>
       <label className="text-xs text-zinc-400">Filter column<select value={filterColumn} onChange={event => setFilterColumn(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white"><option value="">No filter</option>{columns.map(column => <option key={column.name} value={column.name}>{column.name}</option>)}</select></label>
-      <label className="text-xs text-zinc-400">Exact filter value<input value={filterValue} onChange={event => setFilterValue(event.target.value)} disabled={!filterColumn} placeholder={filterColumn ? 'e.g. BENIGN' : 'Select a filter column'} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/></label>
+      <label className="text-xs text-zinc-400">Filter values (comma-separated)<input value={filterValue} onChange={event => setFilterValue(event.target.value)} disabled={!filterColumn} placeholder={filterColumn ? 'e.g. BENIGN, DDoS' : 'Select a filter column'} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/></label>
+      <label className="text-xs text-zinc-400">Numeric minimum<input type="number" value={filterMin} onChange={event => setFilterMin(event.target.value)} disabled={!filterColumn || !/int|float|double|decimal/i.test(columns.find(column => column.name === filterColumn)?.dtype ?? '')} placeholder="Optional minimum" className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/></label>
+      <label className="text-xs text-zinc-400">Numeric maximum<input type="number" value={filterMax} onChange={event => setFilterMax(event.target.value)} disabled={!filterColumn || !/int|float|double|decimal/i.test(columns.find(column => column.name === filterColumn)?.dtype ?? '')} placeholder="Optional maximum" className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/></label>
     </div>
     <button onClick={createChart} disabled={busy || !xColumn} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-50">{busy ? <Loader2 size={15} className="animate-spin"/> : <Sparkles size={15}/>}Generate chart</button>
     {error && <p role="alert" className="mt-3 text-xs text-red-300">{error}</p>}
