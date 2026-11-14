@@ -1,5 +1,6 @@
 
 import { useState } from 'react'
+import DataExplorer from './components/DataExplorer'
 import {
   Activity,
   AlertCircle,
@@ -93,6 +94,7 @@ interface CleaningPreviewResponse {
 }
 
 function App() {
+  const [activePage, setActivePage] = useState('Overview')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -108,10 +110,10 @@ function App() {
   const [cleaningSuccess, setCleaningSuccess] = useState('')
 
   const navigation = [
-    { label: 'Overview', icon: LayoutDashboard, active: true },
-    { label: 'Data Explorer', icon: Database, active: false },
-    { label: 'Analytics', icon: BarChart3, active: false },
-    { label: 'Machine Learning', icon: BrainCircuit, active: false },
+    { label: 'Overview', icon: LayoutDashboard },
+    { label: 'Data Explorer', icon: Database },
+    { label: 'Analytics', icon: BarChart3 },
+    { label: 'Machine Learning', icon: BrainCircuit },
   ]
 
   const handleFileChange = (file: File | null) => {
@@ -329,6 +331,10 @@ function App() {
     },
   ]
 
+  if (activePage === 'Data Explorer') {
+    return <DataExplorer onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -352,17 +358,26 @@ function App() {
             {navigation.map((item) => {
               const Icon = item.icon
               return (
-                <div
+                <button
                   key={item.label}
-                  className={`flex items-center gap-3 rounded-xl px-3 py-3 text-sm ${
-                    item.active
+                  type="button"
+                  onClick={() => {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer') {
+                      setActivePage(item.label)
+                    }
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left text-sm transition ${
+                    activePage === item.label
                       ? 'border border-violet-500/20 bg-violet-600/15 font-medium text-violet-300'
-                      : 'text-zinc-500'
+                      : 'text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300'
                   }`}
                 >
                   <Icon size={18} />
                   {item.label}
-                </div>
+                  {item.label === 'Data Explorer' && (
+                    <span className="ml-auto rounded-md bg-violet-500/15 px-2 py-0.5 text-[10px] text-violet-300">NEW</span>
+                  )}
+                </button>
               )
             })}
           </nav>
