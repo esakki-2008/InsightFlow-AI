@@ -59,7 +59,6 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [activeTab, setActiveTab] = useState<'table' | 'statistics' | 'categories' | 'correlation'>('table')
-  const [selectedColumn, setSelectedColumn] = useState('')
 
   const runExplore = async (nextPage = 1, nextSearch = search) => {
     if (!file) { setError('Choose a CSV or Excel file to explore.'); return }
