@@ -35,3 +35,7 @@ Thumbs.db
 
 # Generated cleaning output
 cleaned_dataset.csv
+
+# Locally saved ML model artifacts (generated at runtime)
+backend/artifacts/
+*.joblib
