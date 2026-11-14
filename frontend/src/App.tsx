@@ -3,6 +3,7 @@ import { useState } from 'react'
 import DataExplorer from './components/DataExplorer'
 import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
+import DatasetQAWorkbench from './components/DatasetQAWorkbench'
 import {
   Activity,
   AlertCircle,
@@ -14,6 +15,7 @@ import {
   Download,
   FileSpreadsheet,
   LayoutDashboard,
+  MessageSquareText,
   Loader2,
   RefreshCw,
   Settings,
@@ -117,6 +119,7 @@ function App() {
     { label: 'Analytics', icon: BarChart3 },
     { label: 'Machine Learning', icon: BrainCircuit },
     { label: 'AI Insights', icon: Sparkles },
+    { label: 'Dataset Q&A', icon: MessageSquareText },
   ]
 
   const handleFileChange = (file: File | null) => {
@@ -346,6 +349,10 @@ function App() {
     return <InsightsWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'Dataset Q&A') {
+    return <DatasetQAWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -373,7 +380,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Machine Learning' || item.label === 'AI Insights') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Dataset Q&A') {
                       setActivePage(item.label)
                     }
                   }}
