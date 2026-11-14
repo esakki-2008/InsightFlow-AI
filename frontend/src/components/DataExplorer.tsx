@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import ChartBuilder from './ChartBuilder'
+import ChartWorkspace from './ChartWorkspace'
 import {
   ArrowLeft,
   BarChart3,
@@ -231,7 +231,7 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
                   <span className="text-[11px] text-zinc-500">{globalFilterColumn ? 'Shared filter configured for chart generation.' : 'All dataset records are included.'}</span>
                 </div>
               </section>
-              <ChartBuilder file={file} columns={data.columns} filterColumn={globalFilterColumn} filterValue={globalFilterValues} filterMin={globalFilterMin} filterMax={globalFilterMax}/>
+              <ChartWorkspace file={file} columns={data.columns} filterColumn={globalFilterColumn} filterValue={globalFilterValues} filterMin={globalFilterMin} filterMax={globalFilterMax}/>
             </>}
           </div>}
 
