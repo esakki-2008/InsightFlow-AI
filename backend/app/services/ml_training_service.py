@@ -5,6 +5,8 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 
+from app.services.ml_model_service import save_model_bundle
+
 
 def train_classification_models(
     prepared: dict,
@@ -100,9 +102,20 @@ def train_classification_models(
                 for feature, score in ranked
             ]
 
+    model_id = save_model_bundle(
+        estimators=estimators,
+        target_column=prepared["summary"]["target_column"],
+        feature_columns=list(X_train.columns.astype(str)),
+        imputation_medians=prepared["imputation_medians"],
+        class_labels=classes,
+        random_state=random_state,
+    )
+
     results.sort(key=lambda item: item["f1_macro"], reverse=True)
     return {
         "task": "binary_classification",
+        "model_id": model_id,
+        "saved_models": list(estimators.keys()),
         "models_trained": len(results),
         "test_rows": int(len(X_test)),
         "feature_count": int(X_train.shape[1]),
