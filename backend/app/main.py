@@ -6,6 +6,7 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from app.services.chart_service import generate_chart_data
 from app.services.cleaning_service import (
     apply_cleaning,
     generate_cleaning_preview,
@@ -158,6 +159,53 @@ async def prepare_ml_dataset(
         raise HTTPException(
             status_code=400,
             detail="Unable to prepare this dataset for machine learning.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+
+
+@app.post("/api/v1/datasets/chart")
+async def build_dataset_chart(
+    file: UploadFile = File(...),
+    x_column: str = Form(...),
+    y_column: str = Form(""),
+    chart_type: str = Form("bar"),
+    aggregation: str = Form("sum"),
+):
+    """Return chart-ready aggregates calculated from the full uploaded dataset."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        chart = generate_chart_data(
+            dataframe=dataframe,
+            x_column=x_column,
+            y_column=y_column,
+            chart_type=chart_type,
+            aggregation=aggregation,
+        )
+        return {"message": "Chart data generated successfully", "filename": filename, "chart": chart}
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to generate chart data for this dataset.",
         ) from exc
     finally:
         await file.close()
