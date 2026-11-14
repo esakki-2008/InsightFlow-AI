@@ -767,13 +767,13 @@ function App() {
                                       key={`${item.old_name}-${index}`}
                                       className="rounded-lg bg-white/[0.03] p-2 text-xs"
                                     >
-                                      <span className="text-zinc-500">
-                                        {item.old_name}
-                                      </span>
+                                      <code className="whitespace-pre-wrap text-zinc-400">
+                                        {JSON.stringify(item.old_name)}
+                                      </code>
                                       <span className="mx-2 text-violet-400">→</span>
-                                      <span className="text-emerald-300">
-                                        {item.new_name}
-                                      </span>
+                                      <code className="whitespace-pre-wrap text-emerald-300">
+                                        {JSON.stringify(item.new_name)}
+                                      </code>
                                     </li>
                                   ),
                                 )}
