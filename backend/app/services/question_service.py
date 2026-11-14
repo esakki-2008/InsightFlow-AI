@@ -180,7 +180,10 @@ def answer_dataset_question(dataframe: pd.DataFrame, question: str) -> dict:
         })
 
     # Count a named class/category, e.g. "How many DDoS records are present?"
-    value_match = re.search(r"how many (.+?)(?: records?| rows?| samples?)?(?: are| is| exist| present| in the dataset)?$", q)
+    value_match = re.search(
+        r"how many (.+?)(?: records?| rows?| samples?)?(?: are present| is present| exist| present| in the dataset)?$",
+        q,
+    )
     if value_match:
         requested = value_match.group(1).strip()
         requested = re.sub(r"\b(the|there|are|is|present|in|dataset)\b", " ", requested).strip()
@@ -202,7 +205,6 @@ def answer_dataset_question(dataframe: pd.DataFrame, question: str) -> dict:
             return response("category_count", f"The value {requested} appears in multiple categorical columns.", {
                 "value": requested, "matches": details
             })
-
     raise ValueError(
         "I couldn't interpret that question yet. Try asking for a row count, missing values, "
         "duplicate rows, the most common value in a column, a numeric average/minimum/maximum, "
