@@ -60,6 +60,10 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'statistics' | 'categories' | 'correlation'>('dashboard')
+  const [globalFilterColumn, setGlobalFilterColumn] = useState('')
+  const [globalFilterValues, setGlobalFilterValues] = useState('')
+  const [globalFilterMin, setGlobalFilterMin] = useState('')
+  const [globalFilterMax, setGlobalFilterMax] = useState('')
 
   const runExplore = async (nextPage = 1, nextSearch = search) => {
     if (!file) { setError('Choose a CSV or Excel file to explore.'); return }
@@ -202,7 +206,33 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
             </div>
-            {file && <ChartBuilder file={file} columns={data.columns} />}
+            {file && <>
+              <section className="rounded-xl border border-violet-400/20 bg-violet-500/[0.035] p-5">
+                <div className="flex items-center gap-2 text-violet-300"><Filter size={16}/><h4 className="font-semibold text-white">Dashboard-wide filters</h4></div>
+                <p className="mt-1 text-xs text-zinc-500">Set a shared filter here before generating charts. The selected filter is applied to chart data.</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                  <label className="text-xs text-zinc-400">Filter column
+                    <select value={globalFilterColumn} onChange={event => setGlobalFilterColumn(event.target.value)} className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white">
+                      <option value="">No dashboard filter</option>{data.columns.map(column => <option key={column.name} value={column.name}>{column.name}</option>)}
+                    </select>
+                  </label>
+                  <label className="text-xs text-zinc-400">Category values (comma-separated)
+                    <input value={globalFilterValues} onChange={event => setGlobalFilterValues(event.target.value)} disabled={!globalFilterColumn} placeholder="e.g. BENIGN, DDoS" className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/>
+                  </label>
+                  <label className="text-xs text-zinc-400">Minimum
+                    <input type="number" value={globalFilterMin} onChange={event => setGlobalFilterMin(event.target.value)} disabled={!globalFilterColumn || !/int|float|double|decimal/i.test(data.columns.find(column => column.name === globalFilterColumn)?.dtype ?? '')} placeholder="Optional minimum" className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/>
+                  </label>
+                  <label className="text-xs text-zinc-400">Maximum
+                    <input type="number" value={globalFilterMax} onChange={event => setGlobalFilterMax(event.target.value)} disabled={!globalFilterColumn || !/int|float|double|decimal/i.test(data.columns.find(column => column.name === globalFilterColumn)?.dtype ?? '')} placeholder="Optional maximum" className="mt-2 w-full rounded-lg border border-white/10 bg-[#171722] px-3 py-2.5 text-sm text-white placeholder:text-zinc-600 disabled:opacity-40"/>
+                  </label>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-3">
+                  <button onClick={() => { setGlobalFilterColumn(''); setGlobalFilterValues(''); setGlobalFilterMin(''); setGlobalFilterMax('') }} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-zinc-300 hover:bg-white/5">Clear dashboard filter</button>
+                  <span className="text-[11px] text-zinc-500">{globalFilterColumn ? 'Shared filter configured for chart generation.' : 'All dataset records are included.'}</span>
+                </div>
+              </section>
+              <ChartBuilder file={file} columns={data.columns} filterColumn={globalFilterColumn} filterValue={globalFilterValues} filterMin={globalFilterMin} filterMax={globalFilterMax}/>
+            </>}
           </div>}
 
           {activeTab === 'table' && <div className="mt-6">
