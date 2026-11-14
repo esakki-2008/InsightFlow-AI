@@ -7,6 +7,7 @@ import {
   Download,
   FileSpreadsheet,
   Loader2,
+  Lightbulb,
   Play,
   ShieldCheck,
   Sparkles,
@@ -75,6 +76,28 @@ type PredictionResponse = {
   }
 }
 
+type ExplanationResponse = {
+  message: string
+  filename: string
+  explanation: {
+    model_id: string
+    model_name: string
+    row: number
+    predicted_label: string
+    confidence: number | null
+    class_probabilities: Record<string, number>
+    explanation_method: string
+    top_feature_sensitivities: {
+      feature: string
+      feature_value: number
+      reference_value: number
+      probability_impact_percentage_points: number
+      direction: string
+    }[]
+    interpretation_note: string
+  }
+}
+
 const panelClass = 'rounded-2xl border border-white/[0.07] bg-[#11111b] p-5 sm:p-6'
 const inputClass = 'mt-2 w-full rounded-xl border border-white/10 bg-[#0b0b13] px-3 py-2.5 text-sm text-zinc-200 outline-none transition focus:border-violet-500'
 
@@ -116,6 +139,10 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
   const [isPredicting, setIsPredicting] = useState(false)
   const [predictionError, setPredictionError] = useState('')
   const [predictionResult, setPredictionResult] = useState<PredictionResponse | null>(null)
+  const [explanationRow, setExplanationRow] = useState('1')
+  const [isExplaining, setIsExplaining] = useState(false)
+  const [explanationError, setExplanationError] = useState('')
+  const [explanationResult, setExplanationResult] = useState<ExplanationResponse | null>(null)
 
   const bestModel = useMemo(
     () => trainingResult?.training.results[0] ?? null,
@@ -137,6 +164,8 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
     setTrainingResult(null)
     setPredictionResult(null)
     setPredictionError('')
+    setExplanationResult(null)
+    setExplanationError('')
 
     try {
       const body = new FormData()
@@ -177,10 +206,44 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Prediction failed.')
       setPredictionResult(result as PredictionResponse)
+      setExplanationRow('1')
+      setExplanationResult(null)
+      setExplanationError('')
     } catch (error) {
       setPredictionError(error instanceof Error ? error.message : 'Unable to generate predictions.')
     } finally {
       setIsPredicting(false)
+    }
+  }
+
+  const explainPrediction = async () => {
+    if (!predictionFile || !predictionResult) {
+      setExplanationError('Run predictions first.')
+      return
+    }
+    const selectedRow = Number(explanationRow)
+    if (!Number.isInteger(selectedRow) || selectedRow < 1 || selectedRow > predictionResult.prediction.rows_predicted) {
+      setExplanationError(`Choose a row between 1 and ${predictionResult.prediction.rows_predicted}.`)
+      return
+    }
+
+    setIsExplaining(true)
+    setExplanationError('')
+    setExplanationResult(null)
+    try {
+      const body = new FormData()
+      body.append('file', predictionFile)
+      body.append('model_id', predictionResult.prediction.model_id)
+      body.append('model_name', predictionResult.prediction.model_name)
+      body.append('row_index', String(selectedRow - 1))
+      const response = await fetch(`${API_URL}/api/v1/ml/explain`, { method: 'POST', body })
+      const result = await response.json()
+      if (!response.ok) throw new Error(result.detail || 'Could not explain this prediction.')
+      setExplanationResult(result as ExplanationResponse)
+    } catch (error) {
+      setExplanationError(error instanceof Error ? error.message : 'Unable to explain this prediction.')
+    } finally {
+      setIsExplaining(false)
     }
   }
 
@@ -417,6 +480,83 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
                 <tbody>{predictionResult.prediction.predictions.slice(0, 100).map((row) => <tr key={row.row} className="border-t border-white/5 text-zinc-300"><td className="px-3 py-2.5">{row.row}</td><td className="px-3 py-2.5 font-medium">{row.predicted_label}</td><td className="px-3 py-2.5">{row.confidence === null ? '—' : percent(row.confidence)}</td></tr>)}</tbody>
               </table>
               {predictionResult.prediction.predictions.length > 100 && <p className="border-t border-white/5 px-3 py-3 text-xs text-zinc-500">Showing the first 100 rows here. Export the CSV for the complete prediction set.</p>}
+            </div>
+
+            <div className="mt-6 rounded-xl border border-violet-500/20 bg-violet-500/[0.04] p-5">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-violet-500/10 p-3 text-violet-300"><Lightbulb size={20} /></div>
+                <div>
+                  <h3 className="font-semibold">Explain an individual prediction</h3>
+                  <p className="mt-1 text-xs leading-5 text-zinc-400">See which input features most changed this model's predicted-class probability for a selected row.</p>
+                </div>
+              </div>
+              <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+                <label className="block flex-1 text-sm text-zinc-300">
+                  Prediction row (1–{predictionResult.prediction.rows_predicted})
+                  <input className={inputClass} type="number" min="1" max={predictionResult.prediction.rows_predicted} value={explanationRow} onChange={(event) => { setExplanationRow(event.target.value); setExplanationResult(null); setExplanationError('') }} />
+                </label>
+                <button onClick={explainPrediction} disabled={isExplaining} className="flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40">
+                  {isExplaining ? <><Loader2 size={17} className="animate-spin" /> Explaining...</> : <><Lightbulb size={17} /> Explain prediction</>}
+                </button>
+              </div>
+              {explanationError && <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={17} className="mt-0.5 shrink-0" />{explanationError}</div>}
+              {explanationResult && (
+                <div className="mt-5 space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-xl border border-white/5 bg-black/20 p-4">
+                      <p className="text-xs text-zinc-500">Predicted class</p>
+                      <p className="mt-2 text-lg font-bold text-violet-200">{explanationResult.explanation.predicted_label}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-black/20 p-4">
+                      <p className="text-xs text-zinc-500">Model confidence</p>
+                      <p className="mt-2 text-lg font-bold text-white">{explanationResult.explanation.confidence === null ? '—' : percent(explanationResult.explanation.confidence)}</p>
+                    </div>
+                    <div className="rounded-xl border border-white/5 bg-black/20 p-4">
+                      <p className="text-xs text-zinc-500">Explained row</p>
+                      <p className="mt-2 text-lg font-bold text-white">{explanationResult.explanation.row}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h4 className="text-sm font-semibold">Top feature sensitivities</h4>
+                      <span className="text-xs text-zinc-500">{explanationResult.explanation.model_name}</span>
+                    </div>
+                    <div className="space-y-3">
+                      {explanationResult.explanation.top_feature_sensitivities.map((item) => {
+                        const impact = Math.abs(item.probability_impact_percentage_points)
+                        const barWidth = Math.min(100, (impact / 100) * 100)
+                        return (
+                          <div key={item.feature} className="rounded-lg border border-white/5 bg-black/20 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                              <span className="font-medium text-zinc-200">{item.feature}</span>
+                              <span className="tabular-nums text-violet-300">{item.probability_impact_percentage_points.toFixed(2)} pp</span>
+                            </div>
+                            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5">
+                              <div className="h-full rounded-full bg-violet-500" style={{ width: `${barWidth}%` }} />
+                            </div>
+                            <p className="mt-2 text-xs text-zinc-500">Value: {item.feature_value.toLocaleString()} · Training median: {item.reference_value.toLocaleString()} · {item.direction.replaceAll('_', ' ')}</p>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h4 className="mb-2 text-sm font-semibold">Class probabilities</h4>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {Object.entries(explanationResult.explanation.class_probabilities).map(([label, probability]) => (
+                        <div key={label} className="flex items-center justify-between rounded-lg border border-white/5 bg-black/20 p-3 text-sm">
+                          <span className="text-zinc-300">{label}</span>
+                          <strong className="text-zinc-100">{percent(probability)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="rounded-lg border border-amber-500/15 bg-amber-500/[0.04] p-3 text-xs leading-5 text-amber-200/80">{explanationResult.explanation.interpretation_note}</p>
+                  <p className="text-[11px] text-zinc-600">Method: {explanationResult.explanation.explanation_method}. Sensitivity indicates model response, not causation; feature effects can interact.</p>
+                </div>
+              )}
             </div>
           </section>
         )}
