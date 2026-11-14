@@ -33,7 +33,11 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
     numeric_stats = {}
     outlier_stats = {}
     for column in numeric_columns:
-        values = pd.to_numeric(frame[column], errors="coerce").dropna()
+        # Infinite values occur in some real-world flow datasets (for example,
+        # rate columns with a zero denominator). Exclude them from descriptive
+        # statistics so the API always returns standards-compliant JSON.
+        values = pd.to_numeric(frame[column], errors="coerce")
+        values = values.replace([np.inf, -np.inf], np.nan).dropna()
         if values.empty:
             continue
         numeric_stats[str(column)] = {
@@ -62,8 +66,11 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
     correlation_columns = numeric_columns[:15]
     correlation = {}
     if len(correlation_columns) >= 2:
-        matrix = frame[correlation_columns].corr(numeric_only=True)
-        matrix = matrix.replace({np.nan: None})
+        correlation_frame = frame[correlation_columns].replace(
+            [np.inf, -np.inf], np.nan
+        )
+        matrix = correlation_frame.corr(numeric_only=True)
+        # Pandas' JSON writer converts NaN correlation values to JSON null.
         correlation = json.loads(matrix.to_json())
 
     filtered = frame
