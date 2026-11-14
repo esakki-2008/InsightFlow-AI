@@ -175,6 +175,8 @@ async def build_dataset_chart(
     aggregation: str = Form("sum"),
     filter_column: str = Form(""),
     filter_value: str = Form(""),
+    filter_min: str = Form(""),
+    filter_max: str = Form(""),
 ):
     """Return chart-ready aggregates calculated from the full uploaded dataset."""
     try:
@@ -201,6 +203,8 @@ async def build_dataset_chart(
             aggregation=aggregation,
             filter_column=filter_column,
             filter_value=filter_value,
+            filter_min=filter_min,
+            filter_max=filter_max,
         )
         return {"message": "Chart data generated successfully", "filename": filename, "chart": chart}
 
