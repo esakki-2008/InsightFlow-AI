@@ -58,7 +58,7 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
   const [error, setError] = useState('')
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
-  const [activeTab, setActiveTab] = useState<'table' | 'statistics' | 'categories' | 'correlation'>('table')
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'table' | 'statistics' | 'categories' | 'correlation'>('dashboard')
 
   const runExplore = async (nextPage = 1, nextSearch = search) => {
     if (!file) { setError('Choose a CSV or Excel file to explore.'); return }
@@ -95,6 +95,7 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
   }
 
   const tabs = [
+    { id: 'dashboard' as const, label: 'Auto Dashboard', icon: Sparkles },
     { id: 'table' as const, label: 'Data table', icon: Table2 },
     { id: 'statistics' as const, label: 'Numeric stats', icon: BarChart3 },
     { id: 'categories' as const, label: 'Categories', icon: Filter },
@@ -156,6 +157,51 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
             <div><h2 className="font-semibold">Analysis workspace</h2><p className="mt-1 text-xs text-zinc-500">Switch between the dataset views</p></div>
             <div className="flex flex-wrap gap-2">{tabs.map(tab => { const Icon = tab.icon; return <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-medium transition ${activeTab === tab.id ? 'bg-violet-600 text-white' : 'border border-white/10 text-zinc-400 hover:bg-white/5 hover:text-white'}`}><Icon size={14}/>{tab.label}</button> })}</div>
           </div>
+
+          {activeTab === 'dashboard' && <div className="mt-6 space-y-5">
+            <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-end">
+              <div><h3 className="text-lg font-semibold">Auto-generated dashboard</h3><p className="mt-1 text-xs text-zinc-500">Charts are generated from full-dataset statistics, not just the visible table page.</p></div>
+              <span className="rounded-full border border-emerald-500/20 bg-emerald-500/5 px-3 py-1.5 text-[10px] text-emerald-300">AUTOMATIC INSIGHTS</span>
+            </div>
+            <div className="grid gap-4 xl:grid-cols-2">
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h4 className="font-semibold">Dataset composition</h4><p className="mt-1 text-xs text-zinc-500">Numeric vs categorical columns</p>
+                <div className="mt-6 flex h-5 overflow-hidden rounded-full bg-white/5">
+                  <div className="bg-violet-500" style={{width:`${data.overview.total_columns ? data.overview.numeric_columns/data.overview.total_columns*100 : 0}%`}}/>
+                  <div className="bg-sky-400" style={{width:`${data.overview.total_columns ? data.overview.categorical_columns/data.overview.total_columns*100 : 0}%`}}/>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-5 text-xs"><span className="text-violet-300">● Numeric: {data.overview.numeric_columns}</span><span className="text-sky-300">● Categorical: {data.overview.categorical_columns}</span></div>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h4 className="font-semibold">Data quality snapshot</h4><p className="mt-1 text-xs text-zinc-500">Missing and duplicate records</p>
+                <div className="mt-5 grid grid-cols-2 gap-3">
+                  <div className="rounded-lg bg-white/[0.03] p-4"><p className="text-xs text-zinc-500">Missing cells</p><p className="mt-2 text-2xl font-bold text-sky-300">{data.overview.missing_values.toLocaleString()}</p></div>
+                  <div className="rounded-lg bg-white/[0.03] p-4"><p className="text-xs text-zinc-500">Duplicate rows</p><p className="mt-2 text-2xl font-bold text-amber-300">{data.overview.duplicate_rows.toLocaleString()}</p></div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h4 className="font-semibold">Numeric feature averages</h4><p className="mt-1 text-xs text-zinc-500">Top 10 numeric columns by absolute mean · full dataset</p>
+                <div className="mt-5 space-y-3">
+                  {numericEntries.filter(([,v])=>v.mean!==null).sort((a,b)=>Math.abs(b[1].mean??0)-Math.abs(a[1].mean??0)).slice(0,10).map(([name,stat])=>{const max=Math.max(...numericEntries.map(([,v])=>Math.abs(v.mean??0)),1);return <div key={name}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="max-w-[65%] truncate text-zinc-300" title={name}>{name}</span><span className="text-zinc-400">{number(stat.mean)}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-violet-500" style={{width:`${Math.abs(stat.mean??0)/max*100}%`}}/></div></div>})}
+                  {!numericEntries.length && <p className="text-sm text-zinc-500">No numeric features available.</p>}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5">
+                <h4 className="font-semibold">Category distribution</h4><p className="mt-1 text-xs text-zinc-500">Top categories detected in the dataset</p>
+                <div className="mt-5 space-y-5">
+                  {categoryEntries.slice(0,3).map(([column,items])=>{const total=items.reduce((sum,item)=>sum+item.count,0);const max=Math.max(...items.map(item=>item.count),1);return <div key={column}><div className="mb-3 flex items-center justify-between"><span className="text-sm font-medium text-zinc-200">{column}</span><span className="text-[10px] text-zinc-500">{total.toLocaleString()} represented</span></div><div className="space-y-2">{items.slice(0,5).map((item,index)=><div key={item.value}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate text-zinc-400">{item.value}</span><span className="text-zinc-500">{item.count.toLocaleString()} · {(item.count/Math.max(total,1)*100).toFixed(1)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className={`h-full rounded-full ${index===0?'bg-violet-500':index===1?'bg-sky-400':'bg-emerald-400'}`} style={{width:`${item.count/max*100}%`}}/></div></div>)}</div></div>})}
+                  {!categoryEntries.length && <p className="text-sm text-zinc-500">No categorical features detected.</p>}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 xl:col-span-2">
+                <h4 className="font-semibold">Potential outliers</h4><p className="mt-1 text-xs text-zinc-500">Top 8 features ranked by IQR outlier count</p>
+                <div className="mt-5 grid gap-x-8 gap-y-4 md:grid-cols-2">
+                  {outliers.slice(0,8).map(([name,count])=><div key={name}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate text-zinc-300">{name}</span><span className="text-amber-300">{count.toLocaleString()}</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-amber-400" style={{width:`${count/Math.max(outliers[0]?.[1]??1,1)*100}%`}}/></div></div>)}
+                  {!outliers.length && <p className="text-sm text-zinc-500">No outlier data available.</p>}
+                </div>
+              </div>
+            </div>
+          </div>}
 
           {activeTab === 'table' && <div className="mt-6">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
