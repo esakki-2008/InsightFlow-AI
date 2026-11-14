@@ -2,20 +2,23 @@
 import { useState } from 'react'
 import {
   Activity,
+  AlertCircle,
   BarChart3,
   BrainCircuit,
+  CheckCircle2,
   ChevronDown,
   Database,
+  Download,
   FileSpreadsheet,
   LayoutDashboard,
+  Loader2,
+  RefreshCw,
   Settings,
   ShieldCheck,
   Sparkles,
   Upload,
+  WandSparkles,
   X,
-  CheckCircle2,
-  AlertCircle,
-  Loader2,
 } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000'
@@ -38,11 +41,71 @@ interface UploadResponse {
   dataset: DatasetInfo
 }
 
+interface CleaningSummary {
+  original_rows: number
+  preview_rows: number
+  original_columns: number
+  cleaned_columns: number
+  duplicate_rows_detected: number
+  missing_values_before: number
+  missing_values_after: number
+}
+
+interface RenamedColumn {
+  old_name: string
+  new_name: string
+}
+
+interface FilledColumn {
+  column: string
+  missing_values_filled: number
+  method: string
+}
+
+interface UnresolvedColumn {
+  column: string
+  missing_values: number
+  reason: string
+}
+
+interface CleaningPreview {
+  summary: CleaningSummary
+  operations: {
+    renamed_columns: RenamedColumn[]
+    duplicates_to_remove: number
+    filled_columns: FilledColumn[]
+    unresolved_columns: UnresolvedColumn[]
+  }
+  column_types: {
+    numeric: string[]
+    categorical: string[]
+  }
+  preview: {
+    columns: string[]
+    rows: Record<string, unknown>[]
+  }
+}
+
+interface CleaningPreviewResponse {
+  message: string
+  filename: string
+  cleaning_preview: CleaningPreview
+}
+
 function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [dataset, setDataset] = useState<DatasetInfo | null>(null)
+
+  const [cleaningPreview, setCleaningPreview] =
+    useState<CleaningPreview | null>(null)
+  const [isPreviewing, setIsPreviewing] = useState(false)
+  const [previewError, setPreviewError] = useState('')
+
+  const [isApplying, setIsApplying] = useState(false)
+  const [applyError, setApplyError] = useState('')
+  const [cleaningSuccess, setCleaningSuccess] = useState('')
 
   const navigation = [
     { label: 'Overview', icon: LayoutDashboard, active: true },
@@ -54,6 +117,11 @@ function App() {
   const handleFileChange = (file: File | null) => {
     setSelectedFile(file)
     setUploadError('')
+    setDataset(null)
+    setCleaningPreview(null)
+    setPreviewError('')
+    setApplyError('')
+    setCleaningSuccess('')
   }
 
   const handleUpload = async () => {
@@ -65,6 +133,10 @@ function App() {
     setIsUploading(true)
     setUploadError('')
     setDataset(null)
+    setCleaningPreview(null)
+    setPreviewError('')
+    setApplyError('')
+    setCleaningSuccess('')
 
     try {
       const formData = new FormData()
@@ -97,6 +169,130 @@ function App() {
     } finally {
       setIsUploading(false)
     }
+  }
+
+  const handleCleaningPreview = async () => {
+    if (!selectedFile) {
+      setPreviewError('Please select a dataset first.')
+      return
+    }
+
+    setIsPreviewing(true)
+    setPreviewError('')
+    setApplyError('')
+    setCleaningSuccess('')
+    setCleaningPreview(null)
+
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+
+      const response = await fetch(
+        `${API_URL}/api/v1/datasets/clean/preview`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      )
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(
+          result.detail || 'Unable to generate the cleaning preview.',
+        )
+      }
+
+      const previewResult = result as CleaningPreviewResponse
+      setCleaningPreview(previewResult.cleaning_preview)
+    } catch (error) {
+      setPreviewError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while generating the preview.',
+      )
+    } finally {
+      setIsPreviewing(false)
+    }
+  }
+
+  const handleApplyCleaning = async () => {
+    if (!selectedFile || !cleaningPreview) {
+      setApplyError('Generate a cleaning preview before applying cleaning.')
+      return
+    }
+
+    const approved = window.confirm(
+      'Apply the proposed cleaning operations and download a new CSV file? Your original file will not be changed.',
+    )
+
+    if (!approved) return
+
+    setIsApplying(true)
+    setApplyError('')
+    setCleaningSuccess('')
+
+    try {
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('confirm', 'true')
+
+      const response = await fetch(
+        `${API_URL}/api/v1/datasets/clean/apply`,
+        {
+          method: 'POST',
+          body: formData,
+        },
+      )
+
+      if (!response.ok) {
+        let message = 'Unable to apply the cleaning operations.'
+
+        try {
+          const result = await response.json()
+          message = result.detail || message
+        } catch {
+          // Keep the default error message if the response is not JSON.
+        }
+
+        throw new Error(message)
+      }
+
+      const blob = await response.blob()
+      const downloadUrl = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+
+      link.href = downloadUrl
+      link.download = 'cleaned_dataset.csv'
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+
+      window.URL.revokeObjectURL(downloadUrl)
+
+      const rowsRemoved =
+        response.headers.get('X-Cleaning-Rows-Removed')
+
+      setCleaningSuccess(
+        rowsRemoved !== null
+          ? `Cleaned CSV downloaded successfully. ${rowsRemoved} duplicate rows removed.`
+          : 'Cleaned CSV downloaded successfully.',
+      )
+    } catch (error) {
+      setApplyError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while applying cleaning.',
+      )
+    } finally {
+      setIsApplying(false)
+    }
+  }
+
+  const formatPreviewValue = (value: unknown): string => {
+    if (value === null || value === undefined) return '—'
+    if (typeof value === 'object') return JSON.stringify(value)
+    return String(value)
   }
 
   const stats = [
@@ -281,7 +477,7 @@ function App() {
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   className="hidden"
-                  disabled={isUploading}
+                  disabled={isUploading || isPreviewing || isApplying}
                   onChange={(event) =>
                     handleFileChange(event.target.files?.[0] ?? null)
                   }
@@ -305,7 +501,7 @@ function App() {
                     </div>
                   </div>
                   <button
-                    disabled={isUploading}
+                    disabled={isUploading || isPreviewing || isApplying}
                     onClick={() => handleFileChange(null)}
                     className="rounded-lg p-2 text-zinc-500 hover:bg-white/5 hover:text-white disabled:opacity-40"
                     aria-label="Remove selected file"
@@ -317,7 +513,7 @@ function App() {
 
               <button
                 onClick={handleUpload}
-                disabled={!selectedFile || isUploading}
+                disabled={!selectedFile || isUploading || isPreviewing || isApplying}
                 className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {isUploading ? (
@@ -406,6 +602,405 @@ function App() {
                 </p>
               </div>
             </div>
+          </section>
+
+          {/* Data cleaning workflow */}
+          <section className="rounded-2xl border border-violet-500/20 bg-[#11111b] p-6">
+            <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+              <div>
+                <div className="flex items-center gap-2">
+                  <div className="rounded-xl bg-violet-500/10 p-2.5 text-violet-400">
+                    <WandSparkles size={21} />
+                  </div>
+                  <h3 className="text-lg font-semibold">Data Cleaning Studio</h3>
+                </div>
+                <p className="mt-2 text-sm text-zinc-500">
+                  Prepare your dataset before analytics and machine learning.
+                </p>
+              </div>
+
+              <span className="w-fit rounded-full border border-violet-500/20 bg-violet-500/10 px-3 py-1.5 text-xs text-violet-300">
+                Phase 2 · Data preparation
+              </span>
+            </div>
+
+            {!dataset && (
+              <div className="mt-6 rounded-xl border border-white/5 bg-white/[0.02] p-5 text-center">
+                <Database className="mx-auto mb-3 text-zinc-600" size={25} />
+                <p className="text-sm text-zinc-400">
+                  Upload and inspect a dataset to begin cleaning.
+                </p>
+              </div>
+            )}
+
+            {dataset && (
+              <>
+                <div className="mt-6 rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <FileSpreadsheet className="shrink-0 text-violet-400" size={22} />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-zinc-200">
+                          {dataset.filename}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500">
+                          Ready for cleaning preview
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleCleaningPreview}
+                      disabled={!selectedFile || isPreviewing || isApplying}
+                      className="flex items-center justify-center gap-2 rounded-xl border border-violet-500/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-300 transition hover:bg-violet-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isPreviewing ? (
+                        <>
+                          <Loader2 size={16} className="animate-spin" />
+                          Generating preview...
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw size={16} />
+                          Generate cleaning preview
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {previewError && (
+                  <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-400">
+                    <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                    <p>{previewError}</p>
+                  </div>
+                )}
+
+                {cleaningPreview && (
+                  <div className="mt-6 space-y-6">
+                    <div className="flex items-center gap-2 text-emerald-400">
+                      <CheckCircle2 size={19} />
+                      <p className="text-sm font-semibold">
+                        Cleaning preview generated successfully
+                      </p>
+                    </div>
+
+                    {/* Summary cards */}
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      {[
+                        {
+                          label: 'Original rows',
+                          value: cleaningPreview.summary.original_rows,
+                        },
+                        {
+                          label: 'Rows after cleaning',
+                          value: cleaningPreview.summary.preview_rows,
+                        },
+                        {
+                          label: 'Duplicate rows',
+                          value: cleaningPreview.summary.duplicate_rows_detected,
+                        },
+                        {
+                          label: 'Missing values before',
+                          value: cleaningPreview.summary.missing_values_before,
+                        },
+                        {
+                          label: 'Missing values after',
+                          value: cleaningPreview.summary.missing_values_after,
+                        },
+                        {
+                          label: 'Original columns',
+                          value: cleaningPreview.summary.original_columns,
+                        },
+                        {
+                          label: 'Numeric columns',
+                          value: cleaningPreview.column_types.numeric.length,
+                        },
+                        {
+                          label: 'Categorical columns',
+                          value: cleaningPreview.column_types.categorical.length,
+                        },
+                      ].map((item) => (
+                        <div
+                          key={item.label}
+                          className="rounded-xl border border-white/5 bg-white/[0.025] p-4"
+                        >
+                          <p className="text-xs text-zinc-500">{item.label}</p>
+                          <p className="mt-2 text-2xl font-bold text-white">
+                            {item.value.toLocaleString()}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Operations */}
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5">
+                        <h4 className="font-semibold text-zinc-200">
+                          Proposed cleaning operations
+                        </h4>
+                        <div className="mt-4 space-y-4 text-sm">
+                          <div>
+                            <p className="text-zinc-400">
+                              Duplicate rows to remove
+                            </p>
+                            <p className="mt-1 font-semibold text-violet-300">
+                              {cleaningPreview.operations.duplicates_to_remove}
+                            </p>
+                          </div>
+
+                          <div>
+                            <p className="text-zinc-400">
+                              Column names to normalize
+                            </p>
+                            {cleaningPreview.operations.renamed_columns.length > 0 ? (
+                              <ul className="mt-2 space-y-2">
+                                {cleaningPreview.operations.renamed_columns.map(
+                                  (item, index) => (
+                                    <li
+                                      key={`${item.old_name}-${index}`}
+                                      className="rounded-lg bg-white/[0.03] p-2 text-xs"
+                                    >
+                                      <span className="text-zinc-500">
+                                        {item.old_name}
+                                      </span>
+                                      <span className="mx-2 text-violet-400">→</span>
+                                      <span className="text-emerald-300">
+                                        {item.new_name}
+                                      </span>
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 text-xs text-zinc-600">
+                                No column-name changes needed.
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <p className="text-zinc-400">
+                              Missing values to fill
+                            </p>
+                            {cleaningPreview.operations.filled_columns.length > 0 ? (
+                              <ul className="mt-2 space-y-2">
+                                {cleaningPreview.operations.filled_columns.map(
+                                  (item, index) => (
+                                    <li
+                                      key={`${item.column}-${index}`}
+                                      className="rounded-lg bg-white/[0.03] p-2 text-xs text-zinc-300"
+                                    >
+                                      <span className="font-medium text-white">
+                                        {item.column}
+                                      </span>
+                                      <span className="text-zinc-500">
+                                        {' '}· {item.missing_values_filled} values
+                                        {' '}· {item.method}
+                                      </span>
+                                    </li>
+                                  ),
+                                )}
+                              </ul>
+                            ) : (
+                              <p className="mt-1 text-xs text-zinc-600">
+                                No missing values need filling.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-xl border border-white/5 bg-white/[0.02] p-5">
+                        <h4 className="font-semibold text-zinc-200">
+                          Column type detection
+                        </h4>
+
+                        <div className="mt-4">
+                          <p className="text-xs font-medium text-violet-300">
+                            Numeric columns ({cleaningPreview.column_types.numeric.length})
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {cleaningPreview.column_types.numeric.length > 0 ? (
+                              cleaningPreview.column_types.numeric.map((column) => (
+                                <span
+                                  key={column}
+                                  className="rounded-lg bg-violet-500/10 px-2.5 py-1.5 text-xs text-violet-300"
+                                >
+                                  {column}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-zinc-600">None detected</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="mt-5">
+                          <p className="text-xs font-medium text-sky-300">
+                            Categorical columns ({cleaningPreview.column_types.categorical.length})
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {cleaningPreview.column_types.categorical.length > 0 ? (
+                              cleaningPreview.column_types.categorical.map((column) => (
+                                <span
+                                  key={column}
+                                  className="rounded-lg bg-sky-500/10 px-2.5 py-1.5 text-xs text-sky-300"
+                                >
+                                  {column}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-xs text-zinc-600">None detected</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Unresolved values warning */}
+                    {cleaningPreview.operations.unresolved_columns.length > 0 && (
+                      <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
+                        <div className="flex items-center gap-2 text-amber-300">
+                          <AlertCircle size={18} />
+                          <p className="text-sm font-semibold">
+                            Some missing values could not be filled
+                          </p>
+                        </div>
+                        <p className="mt-2 text-xs leading-relaxed text-zinc-400">
+                          These columns may still contain missing values in the downloaded file.
+                        </p>
+                        <ul className="mt-3 space-y-2">
+                          {cleaningPreview.operations.unresolved_columns.map(
+                            (item, index) => (
+                              <li
+                                key={`${item.column}-${index}`}
+                                className="text-xs text-amber-200/80"
+                              >
+                                <span className="font-semibold">{item.column}</span>
+                                {' '}· {item.missing_values} missing values
+                                {' '}· {item.reason}
+                              </li>
+                            ),
+                          )}
+                        </ul>
+                      </div>
+                    )}
+
+                    {/* First 10 rows preview */}
+                    <div className="overflow-hidden rounded-xl border border-white/5">
+                      <div className="flex flex-col justify-between gap-2 border-b border-white/5 bg-white/[0.02] p-4 sm:flex-row sm:items-center">
+                        <div>
+                          <h4 className="font-semibold text-zinc-200">
+                            Cleaned data preview
+                          </h4>
+                          <p className="mt-1 text-xs text-zinc-500">
+                            First {cleaningPreview.preview.rows.length} rows after proposed cleaning
+                          </p>
+                        </div>
+                        <span className="text-xs text-zinc-500">
+                          {cleaningPreview.preview.columns.length} columns
+                        </span>
+                      </div>
+
+                      {cleaningPreview.preview.rows.length > 0 ? (
+                        <div className="max-h-[420px] overflow-auto">
+                          <table className="w-full min-w-max text-left text-xs">
+                            <thead className="sticky top-0 bg-[#1a1a27] text-zinc-400">
+                              <tr>
+                                <th className="px-4 py-3 font-medium">#</th>
+                                {cleaningPreview.preview.columns.map((column) => (
+                                  <th
+                                    key={column}
+                                    className="px-4 py-3 font-medium"
+                                  >
+                                    {column}
+                                  </th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {cleaningPreview.preview.rows.map((row, rowIndex) => (
+                                <tr
+                                  key={rowIndex}
+                                  className="border-t border-white/5 text-zinc-300 hover:bg-white/[0.02]"
+                                >
+                                  <td className="px-4 py-3 text-zinc-600">
+                                    {rowIndex + 1}
+                                  </td>
+                                  {cleaningPreview.preview.columns.map((column) => (
+                                    <td
+                                      key={column}
+                                      className="max-w-64 truncate px-4 py-3"
+                                      title={formatPreviewValue(row[column])}
+                                    >
+                                      {formatPreviewValue(row[column])}
+                                    </td>
+                                  ))}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <p className="p-5 text-sm text-zinc-500">
+                          No preview rows were returned.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Approval and download */}
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-5">
+                      <div className="flex items-start gap-3">
+                        <ShieldCheck className="mt-0.5 shrink-0 text-emerald-400" size={22} />
+                        <div>
+                          <h4 className="font-semibold text-emerald-300">
+                            Review and approve cleaning
+                          </h4>
+                          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                            Review the proposed operations and sample rows before approving.
+                            Approval applies the backend cleaning rules and downloads a new CSV.
+                            Your original file remains unchanged.
+                          </p>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={handleApplyCleaning}
+                        disabled={isApplying || isPreviewing}
+                        className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-40 sm:w-auto"
+                      >
+                        {isApplying ? (
+                          <>
+                            <Loader2 size={17} className="animate-spin" />
+                            Applying cleaning...
+                          </>
+                        ) : (
+                          <>
+                            <Download size={17} />
+                            Approve & download cleaned CSV
+                          </>
+                        )}
+                      </button>
+
+                      {applyError && (
+                        <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-400">
+                          <AlertCircle size={18} className="mt-0.5 shrink-0" />
+                          <p>{applyError}</p>
+                        </div>
+                      )}
+
+                      {cleaningSuccess && (
+                        <div className="mt-4 flex items-start gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">
+                          <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
+                          <p>{cleaningSuccess}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </section>
 
           <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6">
