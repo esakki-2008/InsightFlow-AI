@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder
 
 
 def prepare_classification_dataset(
@@ -17,6 +15,17 @@ def prepare_classification_dataset(
     Only numeric predictors are used in this first baseline workflow. Median
     imputation values are learned from the training partition only.
     """
+    # Keep the API server importable even before optional ML dependencies are
+    # installed. The ML endpoint will provide an actionable error if absent.
+    try:
+        from sklearn.model_selection import train_test_split
+        from sklearn.preprocessing import LabelEncoder
+    except ImportError as exc:
+        raise RuntimeError(
+            "scikit-learn is not installed in the backend environment. "
+            "Run: python -m pip install -r backend/requirements.txt"
+        ) from exc
+
     if dataframe.empty:
         raise ValueError("Cannot prepare an empty dataset.")
     if not 0.1 <= test_size <= 0.4:
@@ -81,8 +90,6 @@ def prepare_classification_dataset(
 
     encoder = LabelEncoder()
     encoded_labels = encoder.fit_transform(labels.astype(str))
-    minimum_class_count = int(class_counts.min())
-    stratify_values = encoded_labels if minimum_class_count >= 2 else None
 
     try:
         X_train, X_test, y_train, y_test = train_test_split(
@@ -90,12 +97,11 @@ def prepare_classification_dataset(
             encoded_labels,
             test_size=test_size,
             random_state=random_state,
-            stratify=stratify_values,
+            stratify=encoded_labels,
         )
     except ValueError as exc:
         raise ValueError(f"Unable to create the train/test split: {exc}") from exc
 
-    # Learn imputation values from training data only to avoid test leakage.
     medians = X_train.median().fillna(0)
     train_missing_before = int(X_train.isna().sum().sum())
     test_missing_before = int(X_test.isna().sum().sum())
