@@ -16,6 +16,8 @@ def generate_chart_data(
     aggregation: str = "sum",
     filter_column: str = "",
     filter_value: str = "",
+    filter_min: str = "",
+    filter_max: str = "",
 ) -> dict:
     """Build chart-ready aggregates from the full uploaded dataset."""
     if dataframe.empty:
@@ -37,7 +39,15 @@ def generate_chart_data(
         if filter_column not in frame.columns:
             raise ValueError(f"Filter column '{filter_column}' was not found.")
         if filter_value.strip():
-            frame = frame[frame[filter_column].astype("string").fillna("(Missing)") == filter_value]
+            selected_values = [value.strip() for value in filter_value.split(",") if value.strip()]
+            frame = frame[frame[filter_column].astype("string").fillna("(Missing)").isin(selected_values)]
+        if filter_min.strip() or filter_max.strip():
+            numeric_filter = pd.to_numeric(frame[filter_column], errors="coerce")
+            if filter_min.strip():
+                numeric_filter = numeric_filter[numeric_filter >= float(filter_min)]
+            if filter_max.strip():
+                numeric_filter = numeric_filter[numeric_filter <= float(filter_max)]
+            frame = frame.loc[numeric_filter.index]
         if frame.empty:
             raise ValueError("No records match the selected filter.")
 
@@ -93,5 +103,5 @@ def generate_chart_data(
             "aggregation": aggregation if y_column and aggregation != "count" else "count",
             "y_column": y_column if aggregation != "count" else "",
             "points": points, "total_records": int(len(frame)), "filtered_records": int(len(frame)),
-            "filter_column": filter_column, "filter_value": filter_value,
+            "filter_column": filter_column, "filter_value": filter_value, "filter_min": filter_min, "filter_max": filter_max,
             "note": "Showing the top 20 groups by value."}
