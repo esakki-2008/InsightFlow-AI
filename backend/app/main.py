@@ -16,6 +16,7 @@ from app.services.exploration_service import generate_exploration
 from app.services.ml_preparation_service import prepare_classification_dataset
 from app.services.ml_training_service import train_classification_models
 from app.services.ml_model_service import predict_with_saved_model
+from app.services.ml_explainability_service import explain_prediction
 
 
 app = FastAPI(
@@ -260,6 +261,53 @@ async def predict_with_trained_model(
         raise HTTPException(
             status_code=400,
             detail="Unable to generate predictions. Check the model ID and dataset.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/ml/explain")
+async def explain_saved_model_prediction(
+    file: UploadFile = File(...),
+    model_id: str = Form(...),
+    model_name: str = Form("Random Forest"),
+    row_index: int = Form(0),
+):
+    """Explain one prediction using local median-replacement sensitivity."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        explanation = explain_prediction(
+            dataframe=dataframe,
+            model_id=model_id,
+            model_name=model_name,
+            row_index=row_index,
+        )
+        return {
+            "message": "Prediction explanation generated successfully",
+            "filename": filename,
+            "explanation": explanation,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to explain this prediction. Check the model and dataset.",
         ) from exc
     finally:
         await file.close()
