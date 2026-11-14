@@ -14,6 +14,8 @@ def generate_chart_data(
     y_column: str = "",
     chart_type: str = "bar",
     aggregation: str = "sum",
+    filter_column: str = "",
+    filter_value: str = "",
 ) -> dict:
     """Build chart-ready aggregates from the full uploaded dataset."""
     if dataframe.empty:
@@ -30,6 +32,14 @@ def generate_chart_data(
         raise ValueError(f"X-axis column '{x_column}' was not found.")
     if y_column and y_column not in frame.columns:
         raise ValueError(f"Y-axis column '{y_column}' was not found.")
+
+    if filter_column:
+        if filter_column not in frame.columns:
+            raise ValueError(f"Filter column '{filter_column}' was not found.")
+        if filter_value.strip():
+            frame = frame[frame[filter_column].astype("string").fillna("(Missing)") == filter_value]
+        if frame.empty:
+            raise ValueError("No records match the selected filter.")
 
     if chart_type == "histogram":
         values = pd.to_numeric(frame[x_column], errors="coerce").replace(
@@ -81,5 +91,6 @@ def generate_chart_data(
               for label, value in grouped.items()]
     return {"chart_type": chart_type, "x_column": x_column, "y_column": y_column,
             "aggregation": aggregation if y_column and aggregation != "count" else "count",
-            "points": points, "total_records": int(len(frame)),
+            "points": points, "total_records": int(len(frame)), "filtered_records": int(len(frame)),
+            "filter_column": filter_column, "filter_value": filter_value,
             "note": "Showing the top 20 groups by value."}
