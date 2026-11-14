@@ -18,6 +18,7 @@ from app.services.ml_training_service import train_classification_models
 from app.services.ml_model_service import predict_with_saved_model
 from app.services.ml_explainability_service import explain_prediction
 from app.services.insights_service import generate_dataset_insights
+from app.services.question_service import answer_dataset_question
 
 
 app = FastAPI(
@@ -153,6 +154,46 @@ async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
         raise HTTPException(
             status_code=400,
             detail="Unable to generate insights for this dataset. Check the file and try again.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/ask")
+async def ask_dataset_question_endpoint(
+    file: UploadFile = File(...),
+    question: str = Form(...),
+):
+    """Answer a natural-language question using deterministic dataset operations."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        answer = answer_dataset_question(dataframe=dataframe, question=question)
+        return {
+            "message": "Dataset question answered successfully",
+            "filename": filename,
+            "qa": answer,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to answer this question. Check the dataset and try again.",
         ) from exc
     finally:
         await file.close()
