@@ -12,6 +12,7 @@ from app.services.cleaning_service import (
 )
 from app.services.dataset_service import inspect_dataset
 from app.services.exploration_service import generate_exploration
+from app.services.ml_preparation_service import prepare_classification_dataset
 
 
 app = FastAPI(
@@ -110,6 +111,53 @@ async def explore_dataset(
         raise HTTPException(
             status_code=400,
             detail="Unable to explore this dataset. Check the file and try again.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/ml/prepare")
+async def prepare_ml_dataset(
+    file: UploadFile = File(...),
+    target_column: str = Form("Label"),
+    test_size: float = Form(0.2),
+    random_state: int = Form(42),
+):
+    """Validate a binary classification target and prepare a stratified split."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        prepared = prepare_classification_dataset(
+            dataframe=dataframe,
+            target_column=target_column,
+            test_size=test_size,
+            random_state=random_state,
+        )
+        return {
+            "message": "ML dataset preparation completed successfully",
+            "filename": filename,
+            "preparation": prepared["summary"],
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to prepare this dataset for machine learning.",
         ) from exc
     finally:
         await file.close()
