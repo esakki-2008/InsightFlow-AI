@@ -173,6 +173,8 @@ async def build_dataset_chart(
     y_column: str = Form(""),
     chart_type: str = Form("bar"),
     aggregation: str = Form("sum"),
+    filter_column: str = Form(""),
+    filter_value: str = Form(""),
 ):
     """Return chart-ready aggregates calculated from the full uploaded dataset."""
     try:
@@ -197,6 +199,8 @@ async def build_dataset_chart(
             y_column=y_column,
             chart_type=chart_type,
             aggregation=aggregation,
+            filter_column=filter_column,
+            filter_value=filter_value,
         )
         return {"message": "Chart data generated successfully", "filename": filename, "chart": chart}
 
