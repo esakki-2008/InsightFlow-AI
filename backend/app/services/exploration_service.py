@@ -1,7 +1,24 @@
 import json
+import math
 
 import numpy as np
 import pandas as pd
+
+
+def _sanitize_json(value):
+    """Replace non-finite numbers recursively so responses comply with JSON."""
+    if isinstance(value, dict):
+        return {str(key): _sanitize_json(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_json(item) for item in value]
+    if isinstance(value, (np.integer,)):
+        return int(value)
+    if isinstance(value, (np.floating, float)):
+        number = float(value)
+        return number if math.isfinite(number) else None
+    if isinstance(value, np.bool_):
+        return bool(value)
+    return value
 
 
 def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
@@ -33,9 +50,6 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
     numeric_stats = {}
     outlier_stats = {}
     for column in numeric_columns:
-        # Infinite values occur in some real-world flow datasets (for example,
-        # rate columns with a zero denominator). Exclude them from descriptive
-        # statistics so the API always returns standards-compliant JSON.
         values = pd.to_numeric(frame[column], errors="coerce")
         values = values.replace([np.inf, -np.inf], np.nan).dropna()
         if values.empty:
@@ -70,7 +84,6 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
             [np.inf, -np.inf], np.nan
         )
         matrix = correlation_frame.corr(numeric_only=True)
-        # Pandas' JSON writer converts NaN correlation values to JSON null.
         correlation = json.loads(matrix.to_json())
 
     filtered = frame
@@ -90,7 +103,7 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
         orient="records", date_format="iso", double_precision=15
     ))
 
-    return {
+    result = {
         "overview": {
             "total_rows": int(total_rows),
             "total_columns": int(len(frame.columns)),
@@ -117,3 +130,4 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
             "search": term,
         },
     }
+    return _sanitize_json(result)
