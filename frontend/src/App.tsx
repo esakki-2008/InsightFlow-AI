@@ -753,9 +753,15 @@ function App() {
                             <p className="text-zinc-400">
                               Column names to normalize
                             </p>
-                            {cleaningPreview.operations.renamed_columns.length > 0 ? (
+                            {cleaningPreview.operations.renamed_columns.some(
+                              (item) => item.old_name !== item.new_name,
+                            ) ? (
                               <ul className="mt-2 space-y-2">
-                                {cleaningPreview.operations.renamed_columns.map(
+                                {cleaningPreview.operations.renamed_columns
+                                  .filter(
+                                    (item) => item.old_name !== item.new_name,
+                                  )
+                                  .map(
                                   (item, index) => (
                                     <li
                                       key={`${item.old_name}-${index}`}
