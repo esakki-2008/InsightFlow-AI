@@ -120,6 +120,9 @@ def prepare_classification_dataset(
         "X_test": X_test,
         "y_train": y_train,
         "y_test": y_test,
+        "imputation_medians": {
+            str(column): float(value) for column, value in medians.items()
+        },
         "summary": {
             "task": "binary_classification",
             "target_column": target_column,
