@@ -17,6 +17,7 @@ from app.services.ml_preparation_service import prepare_classification_dataset
 from app.services.ml_training_service import train_classification_models
 from app.services.ml_model_service import predict_with_saved_model
 from app.services.ml_explainability_service import explain_prediction
+from app.services.insights_service import generate_dataset_insights
 
 
 app = FastAPI(
@@ -115,6 +116,43 @@ async def explore_dataset(
         raise HTTPException(
             status_code=400,
             detail="Unable to explore this dataset. Check the file and try again.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/insights")
+async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
+    """Generate evidence-backed plain-English insights for an uploaded dataset."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        insights = generate_dataset_insights(dataframe)
+        return {
+            "message": "Dataset insights generated successfully",
+            "filename": filename,
+            "insights": insights,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to generate insights for this dataset. Check the file and try again.",
         ) from exc
     finally:
         await file.close()
