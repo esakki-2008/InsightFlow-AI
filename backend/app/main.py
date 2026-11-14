@@ -15,6 +15,7 @@ from app.services.dataset_service import inspect_dataset
 from app.services.exploration_service import generate_exploration
 from app.services.ml_preparation_service import prepare_classification_dataset
 from app.services.ml_training_service import train_classification_models
+from app.services.ml_model_service import predict_with_saved_model
 
 
 app = FastAPI(
@@ -214,6 +215,51 @@ async def train_ml_models(
         raise HTTPException(
             status_code=400,
             detail="Unable to train classification models on this dataset.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/ml/predict")
+async def predict_with_trained_model(
+    file: UploadFile = File(...),
+    model_id: str = Form(...),
+    model_name: str = Form("Random Forest"),
+):
+    """Predict labels for a new dataset using a previously saved model."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        result = predict_with_saved_model(
+            dataframe=dataframe,
+            model_id=model_id,
+            model_name=model_name,
+        )
+        return {
+            "message": "Predictions generated successfully",
+            "filename": filename,
+            "prediction": result,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to generate predictions. Check the model ID and dataset.",
         ) from exc
     finally:
         await file.close()
