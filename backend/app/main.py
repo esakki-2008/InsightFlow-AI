@@ -1,9 +1,30 @@
-from fastapi import FastAPI
+
+from io import BytesIO
+
+import pandas as pd
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
+
+from app.services.cleaning_service import (
+    apply_cleaning,
+    generate_cleaning_preview,
+)
+from app.services.dataset_service import inspect_dataset
+
 
 app = FastAPI(
     title="InsightFlow AI",
     description="An intelligent AI-powered data analysis platform.",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -22,3 +43,128 @@ def health_check():
         "application": "InsightFlow AI",
         "version": "0.1.0",
     }
+
+
+@app.post("/api/v1/datasets/upload")
+async def upload_dataset(file: UploadFile = File(...)):
+    try:
+        content = await file.read(10 * 1024 * 1024 + 1)
+
+        result = inspect_dataset(
+            filename=file.filename or "unknown",
+            content=content,
+        )
+
+        return {
+            "message": "Dataset inspected successfully",
+            "dataset": result,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/clean/preview")
+async def preview_dataset_cleaning(file: UploadFile = File(...)):
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content))
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(
+                    BytesIO(content),
+                    encoding="cp1252",
+                )
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError(
+                "Unsupported file type. Upload CSV, XLSX, or XLS."
+            )
+
+        result = generate_cleaning_preview(dataframe)
+
+        return {
+            "message": "Cleaning preview generated successfully",
+            "filename": filename,
+            "cleaning_preview": result,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/clean/apply")
+async def apply_dataset_cleaning(
+    file: UploadFile = File(...),
+    confirm: bool = Form(False),
+):
+    try:
+        if not confirm:
+            raise HTTPException(
+                status_code=400,
+                detail="Cleaning was not approved. Set confirm=true to proceed.",
+            )
+
+        filename = file.filename or "dataset.csv"
+        content = await file.read(10 * 1024 * 1024 + 1)
+
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content))
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(
+                    BytesIO(content),
+                    encoding="cp1252",
+                )
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError(
+                "Unsupported file type. Upload CSV, XLSX, or XLS."
+            )
+
+        cleaned_dataframe, report = apply_cleaning(dataframe)
+
+        csv_content = cleaned_dataframe.to_csv(
+            index=False
+        ).encode("utf-8-sig")
+
+        return StreamingResponse(
+            BytesIO(csv_content),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": (
+                    'attachment; filename="cleaned_dataset.csv"'
+                ),
+                "X-Cleaning-Rows-Removed": str(
+                    report["duplicate_rows_removed"]
+                ),
+            },
+        )
+
+    except HTTPException:
+        raise
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    finally:
+        await file.close()
