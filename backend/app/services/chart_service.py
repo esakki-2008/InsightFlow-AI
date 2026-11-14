@@ -54,7 +54,7 @@ def generate_chart_data(
             for i in range(len(counts))
         ]
         return {"chart_type": chart_type, "x_column": x_column, "y_column": "",
-                "aggregation": "count", "points": points, "total_records": int(len(values))}
+                "aggregation": "count", "points": points, "total_records": int(len(frame)), "filtered_records": int(len(values)), "filter_column": filter_column, "filter_value": filter_value}
 
     if chart_type == "scatter":
         if not y_column:
@@ -71,7 +71,7 @@ def generate_chart_data(
         points = [{"label": str(i), "x": float(row.x), "value": float(row.y)}
                   for i, row in enumerate(pairs.itertuples(index=False))]
         return {"chart_type": chart_type, "x_column": x_column, "y_column": y_column,
-                "aggregation": "none", "points": points, "total_records": int(len(x_values.dropna()))}
+                "aggregation": "none", "points": points, "total_records": int(len(frame)), "filtered_records": int(len(pairs)), "filter_column": filter_column, "filter_value": filter_value}
 
     x_values = frame[x_column].astype("string").fillna("(Missing)")
     if y_column and aggregation != "count":
@@ -91,6 +91,7 @@ def generate_chart_data(
               for label, value in grouped.items()]
     return {"chart_type": chart_type, "x_column": x_column, "y_column": y_column,
             "aggregation": aggregation if y_column and aggregation != "count" else "count",
+            "y_column": y_column if aggregation != "count" else "",
             "points": points, "total_records": int(len(frame)), "filtered_records": int(len(frame)),
             "filter_column": filter_column, "filter_value": filter_value,
             "note": "Showing the top 20 groups by value."}
