@@ -11,6 +11,7 @@ from app.services.cleaning_service import (
     generate_cleaning_preview,
 )
 from app.services.dataset_service import inspect_dataset
+from app.services.exploration_service import generate_exploration
 
 
 app = FastAPI(
@@ -63,6 +64,53 @@ async def upload_dataset(file: UploadFile = File(...)):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/explore")
+async def explore_dataset(
+    file: UploadFile = File(...),
+    page: int = Form(1),
+    page_size: int = Form(25),
+    search: str = Form(""),
+):
+    """Explore an uploaded dataset with search, pagination, and EDA statistics."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        result = generate_exploration(
+            dataframe=dataframe,
+            page=page,
+            page_size=page_size,
+            search=search,
+        )
+        return {
+            "message": "Dataset exploration completed successfully",
+            "filename": filename,
+            "exploration": result,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to explore this dataset. Check the file and try again.",
+        ) from exc
     finally:
         await file.close()
 
