@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import DataExplorer from './components/DataExplorer'
 import MLWorkbench from './components/MLWorkbench'
+import InsightsWorkbench from './components/InsightsWorkbench'
 import {
   Activity,
   AlertCircle,
@@ -115,6 +116,7 @@ function App() {
     { label: 'Data Explorer', icon: Database },
     { label: 'Analytics', icon: BarChart3 },
     { label: 'Machine Learning', icon: BrainCircuit },
+    { label: 'AI Insights', icon: Sparkles },
   ]
 
   const handleFileChange = (file: File | null) => {
@@ -340,6 +342,10 @@ function App() {
     return <MLWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'AI Insights') {
+    return <InsightsWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -367,7 +373,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Machine Learning') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Machine Learning' || item.label === 'AI Insights') {
                       setActivePage(item.label)
                     }
                   }}
