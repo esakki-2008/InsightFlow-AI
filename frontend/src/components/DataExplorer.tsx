@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import ChartBuilder from './ChartBuilder'
 import {
   ArrowLeft,
   BarChart3,
@@ -201,6 +202,7 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
             </div>
+            {file && <ChartBuilder file={file} columns={data.columns} />}
           </div>}
 
           {activeTab === 'table' && <div className="mt-6">
