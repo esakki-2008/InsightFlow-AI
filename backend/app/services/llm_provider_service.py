@@ -32,7 +32,7 @@ def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> d
         "max_tokens": 128,
         "temperature": 0,
         "stream": False,
-        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     request = Request(
         NVIDIA_CHAT_COMPLETIONS_URL,
@@ -49,14 +49,25 @@ def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> d
         with urlopen(request, timeout=30) as response:
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as exc:
-        # Do not return provider response bodies: they may contain sensitive details.
+        # Extract a short provider diagnostic while redacting the supplied secret.
+        try:
+            provider_error = exc.read().decode("utf-8", errors="replace")
+            parsed_error = json.loads(provider_error)
+            detail = parsed_error.get("detail") or parsed_error.get("message") or parsed_error.get("title") or ""
+            if isinstance(detail, (dict, list)):
+                detail = json.dumps(detail)
+            detail = str(detail).replace(key, "[REDACTED]")[:500]
+        except Exception:
+            detail = ""
+
         if exc.code in (401, 403):
-            raise ValueError("NVIDIA rejected this API key. Check that it is valid and active.") from exc
+            raise ValueError("NVIDIA rejected this API key or account access. Check that it is valid and active.") from exc
         if exc.code == 404:
             raise ValueError("NVIDIA could not find this model. Check the model identifier.") from exc
         if exc.code == 429:
             raise ValueError("NVIDIA rate limit or quota reached. Try again later or check your API quota.") from exc
-        raise ValueError(f"NVIDIA API request failed with status {exc.code}.") from exc
+        suffix = f" Provider detail: {detail}" if detail else ""
+        raise ValueError(f"NVIDIA API request failed with status {exc.code}.{suffix}") from exc
     except (TimeoutError, URLError) as exc:
         raise ValueError("Could not reach NVIDIA. Check your internet connection and try again.") from exc
     except (json.JSONDecodeError, UnicodeDecodeError, KeyError, TypeError) as exc:
