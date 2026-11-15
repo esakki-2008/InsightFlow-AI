@@ -20,6 +20,7 @@ from app.services.ml_explainability_service import explain_prediction
 from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
 from app.services.llm_provider_service import test_nvidia_connection
+from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
 app = FastAPI(
@@ -195,6 +196,53 @@ async def ask_dataset_question_endpoint(
         raise HTTPException(
             status_code=400,
             detail="Unable to answer this question. Check the dataset and try again.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/ask/advanced")
+async def ask_dataset_question_advanced_endpoint(
+    file: UploadFile = File(...),
+    question: str = Form(...),
+    api_key: str = Form(...),
+    model: str = Form("nvidia/nemotron-3.5-lightning-30b-a3b"),
+):
+    """Answer a dataset question using NVIDIA planning and validated local Pandas execution."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        answer = answer_advanced_dataset_question(
+            dataframe=dataframe,
+            question=question,
+            api_key=api_key,
+            model=model,
+        )
+        return {
+            "message": "Advanced AI dataset question answered successfully",
+            "filename": filename,
+            "qa": answer,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=502,
+            detail="Unable to complete Advanced AI analysis. Check the model response and try again.",
         ) from exc
     finally:
         await file.close()
