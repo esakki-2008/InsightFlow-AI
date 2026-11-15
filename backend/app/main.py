@@ -4,10 +4,13 @@ from io import BytesIO
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse\nfrom sqlalchemy.orm import Session
+from fastapi.responses import StreamingResponse
+from sqlalchemy.orm import Session
 
 from app.database import Base, engine, get_db
-from app import models  # Register SQLAlchemy models before table creation.\nfrom app.history_schemas import HistoryCreate\nfrom app.models import AnalysisHistory
+from app import models  # Register SQLAlchemy models before table creation.
+from app.history_schemas import HistoryCreate
+from app.models import AnalysisHistory
 
 from app.services.chart_service import generate_chart_data
 from app.services.cleaning_service import (
