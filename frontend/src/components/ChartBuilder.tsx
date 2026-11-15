@@ -5,7 +5,7 @@ const API_URL = 'http://127.0.0.1:8000'
 type ChartPoint = { label: string; value: number; x?: number }
 type ChartResult = { chart_type: string; x_column: string; y_column: string; aggregation: string; points: ChartPoint[]; total_records: number; filtered_records?: number; filter_column?: string; filter_value?: string; filter_min?: string; filter_max?: string; note?: string }
 
-export default function ChartBuilder({ file, columns, filterColumn, filterValue, filterMin, filterMax }: { file: File; columns: { name: string; dtype: string }[]; filterColumn: string; filterValue: string; filterMin: string; filterMax: string }) {
+export default function ChartBuilder({ file, columns, filterColumn, filterValue, filterMin, filterMax, onChartGenerated }: { file: File; columns: { name: string; dtype: string }[]; filterColumn: string; filterValue: string; filterMin: string; filterMax: string; onChartGenerated?: (chart: ChartResult) => void }) {
   const numericColumns = useMemo(() => columns.filter(column => /int|float|double|decimal/i.test(column.dtype)).map(column => column.name), [columns])
   const [xColumn, setXColumn] = useState(columns[0]?.name ?? '')
   const [yColumn, setYColumn] = useState(numericColumns[0] ?? '')
@@ -35,6 +35,7 @@ export default function ChartBuilder({ file, columns, filterColumn, filterValue,
       if (!response.ok) throw new Error(payload.detail || 'Could not generate chart.')
       const chartResult = payload.chart as ChartResult
       setResult(chartResult)
+      onChartGenerated?.(chartResult)
       setHistoryStatus('')
 
       // Save chart configuration and aggregate metadata only, never raw rows.
