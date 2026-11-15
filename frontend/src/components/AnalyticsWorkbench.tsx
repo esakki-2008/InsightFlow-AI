@@ -47,7 +47,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
     } finally { setBusy(false) }
   }
 
-  const identifierColumns = useMemo(() => (data?.columns ?? []).filter(column => /(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)/i.test(column.name)).map(column => column.name), [data])
+  const identifierColumns = useMemo(() => (data?.columns ?? []).filter(column => /(^id$|(^|[_\s-])id($|[_\s-])|uuid|guid|identifier|serial|roll[_\s-]?no|student[_\s-]?no|customer[_\s-]?no|account[_\s-]?no)/i.test(column.name)).map(column => column.name), [data])
   const categories = useMemo(() => Object.entries(data?.categorical_statistics ?? {}).filter(([name]) => !identifierColumns.includes(name)).slice(0, 4), [data, identifierColumns])
   const numeric = useMemo(() => Object.entries(data?.numeric_statistics ?? {}).filter(([, stat]) => stat.mean !== null).sort((a, b) => Math.abs(b[1].mean ?? 0) - Math.abs(a[1].mean ?? 0)).slice(0, 8), [data])
   const outliers = useMemo(() => Object.entries(data?.outlier_counts_iqr ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8), [data])
