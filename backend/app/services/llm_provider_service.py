@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 
 
 NVIDIA_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
-DEFAULT_NVIDIA_MODEL = "meta/llama-3.3-70b-instruct"
+DEFAULT_NVIDIA_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
 
 
 def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> dict:
