@@ -32,6 +32,25 @@ def _categorical_columns(frame: pd.DataFrame) -> list[str]:
     return result
 
 
+
+def _looks_like_date(series: pd.Series) -> bool:
+    """Recognize common date strings without misclassifying numeric identifiers."""
+    if pd.api.types.is_numeric_dtype(series):
+        return False
+    non_null = series.dropna()
+    if len(non_null) < 2:
+        return False
+    sample = non_null.astype(str).head(min(200, len(non_null)))
+    date_hint = sample.str.contains(
+        r"(?:[-/]|\\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\\b)",
+        case=False,
+        regex=True,
+    ).mean()
+    if date_hint < 0.7:
+        return False
+    parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
+    return float(parsed.notna().mean()) >= 0.8
+
 def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
     """Profile a dataset locally and suggest only questions supported by Standard Q&A."""
     if dataframe.empty:
@@ -46,16 +65,24 @@ def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
     numeric = _numeric_columns(frame)
     categorical = _categorical_columns(frame)
 
-    # Prefer columns whose names indicate useful business measures or dates/prices.
-    priority_terms = (
-        "price", "close", "open", "high", "low", "volume", "revenue",
-        "sales", "profit", "amount", "cost", "salary", "score", "duration",
-        "rate", "count", "total", "temperature", "rain", "age", "quantity",
-    )
+    # Rank business measures by usefulness. Specific measures outrank generic
+    # tokens so Total_Cost does not accidentally outrank Revenue or Profit.
+    priority_weights = {
+        "revenue": 120, "sales": 115, "profit": 110, "net income": 108,
+        "amount": 100, "market cap": 98, "close": 95, "price": 90,
+        "volume": 85, "quantity": 80, "units sold": 80, "total cost": 72,
+        "cost": 65, "salary": 65, "score": 60, "duration": 55,
+        "rate": 50, "count": 45, "temperature": 40, "rain": 40,
+        "age": 30, "open": 25, "high": 25, "low": 25,
+    }
 
     def score_column(name: str) -> int:
         normalized = _clean_name(name)
-        return sum(1 for term in priority_terms if term in normalized)
+        matches = [
+            weight for term, weight in priority_weights.items()
+            if term in normalized
+        ]
+        return max(matches, default=0)
 
     numeric = sorted(numeric, key=lambda name: (-score_column(name), name.lower()))
     suggestions: list[str] = [
@@ -100,7 +127,7 @@ def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
         numeric_values = pd.to_numeric(series, errors="coerce")
         if int(numeric_values.notna().sum()) >= max(2, int(rows * 0.5)):
             kind = "numeric"
-        elif pd.api.types.is_datetime64_any_dtype(series):
+        elif pd.api.types.is_datetime64_any_dtype(series) or _looks_like_date(series):
             kind = "date"
         elif series.nunique(dropna=True) <= min(50, max(2, len(frame) // 2)):
             kind = "categorical"
