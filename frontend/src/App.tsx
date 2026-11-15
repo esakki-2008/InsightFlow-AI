@@ -333,8 +333,8 @@ function App() {
     },
     {
       label: 'ML Models Trained',
-      value: 'Open',
-      change: 'View saved models in Machine Learning',
+      value: '—',
+      change: 'Model totals not connected yet',
       icon: BrainCircuit,
     },
     {
