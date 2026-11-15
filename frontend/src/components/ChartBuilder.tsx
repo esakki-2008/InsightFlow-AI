@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart3, Loader2, Sparkles } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 type ChartPoint = { label: string; value: number; x?: number }
 type ChartResult = { chart_type: string; x_column: string; y_column: string; aggregation: string; points: ChartPoint[]; total_records: number; filtered_records?: number; filter_column?: string; filter_value?: string; filter_min?: string; filter_max?: string; note?: string }
 
