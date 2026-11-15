@@ -1,5 +1,5 @@
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import DataExplorer from './components/DataExplorer'
 import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
@@ -102,8 +102,41 @@ function App() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
-  const [dataset, setDataset] = useState<DatasetInfo | null>(null)
-  const [analysisCount, setAnalysisCount] = useState(0)
+  const [dataset, setDataset] = useState<DatasetInfo | null>(() => {
+    try {
+      const saved = localStorage.getItem('insightflow_dashboard_dataset')
+      return saved ? (JSON.parse(saved) as DatasetInfo) : null
+    } catch {
+      return null
+    }
+  })
+  const [analysisCount, setAnalysisCount] = useState(() => {
+    try {
+      return Number(localStorage.getItem('insightflow_dashboard_analysis_count') || 0)
+    } catch {
+      return 0
+    }
+  })
+
+  useEffect(() => {
+    try {
+      if (dataset) {
+        localStorage.setItem('insightflow_dashboard_dataset', JSON.stringify(dataset))
+      } else {
+        localStorage.removeItem('insightflow_dashboard_dataset')
+      }
+    } catch {
+      // Dashboard remains usable if browser storage is unavailable.
+    }
+  }, [dataset])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('insightflow_dashboard_analysis_count', String(analysisCount))
+    } catch {
+      // Dashboard remains usable if browser storage is unavailable.
+    }
+  }, [analysisCount])
 
   const [cleaningPreview, setCleaningPreview] =
     useState<CleaningPreview | null>(null)
