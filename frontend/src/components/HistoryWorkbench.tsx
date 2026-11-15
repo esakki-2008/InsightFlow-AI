@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Database, Eye, FileText, History, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 const PAGE_SIZE = 10
 
 type HistoryItem = {
