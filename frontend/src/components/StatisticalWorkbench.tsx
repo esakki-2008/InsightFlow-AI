@@ -36,8 +36,8 @@ export default function StatisticalWorkbench({ onBack }: { onBack: () => void })
           body: JSON.stringify({
             filename: file.name,
             analysis_type: 'statistical_analysis',
-            row_count: result.rows ?? null,
-            column_count: result.columns ?? null,
+            row_count: Number(result.rows) || 0,
+            column_count: Number(result.columns) || 0,
             summary: {
               numeric_features_analyzed: statistics.overview.numeric_features_analyzed,
               correlation_pairs_analyzed: statistics.overview.correlation_pairs_analyzed,
