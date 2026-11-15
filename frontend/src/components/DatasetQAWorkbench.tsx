@@ -33,6 +33,12 @@ type Props = { onBack: () => void }
 type SuggestionProfile = {
   rows: number
   columns: number
+  domain: {
+    id: string
+    label: string
+    confidence: 'high' | 'medium' | 'low'
+    scores: Record<string, number>
+  }
   numeric_columns: string[]
   categorical_columns: string[]
   suggestions: string[]
@@ -255,8 +261,16 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
               </div>
             )}
             {suggestionProfile && (
-              <div className="text-xs text-zinc-500">
-                Generated for {suggestionProfile.rows.toLocaleString()} rows and {suggestionProfile.columns} columns · {suggestionProfile.numeric_columns.length} numeric · {suggestionProfile.categorical_columns.length} categorical
+              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+                <span className="rounded-full border border-sky-500/25 bg-sky-500/[0.07] px-3 py-1.5 text-sky-300">
+                  Detected domain: {suggestionProfile.domain.label}
+                </span>
+                <span className="rounded-full border border-white/10 px-2.5 py-1.5 capitalize">
+                  {suggestionProfile.domain.confidence} confidence
+                </span>
+                <span>
+                  {suggestionProfile.rows.toLocaleString()} rows · {suggestionProfile.columns} columns · {suggestionProfile.numeric_columns.length} numeric · {suggestionProfile.categorical_columns.length} categorical
+                </span>
               </div>
             )}
             {suggestions.length > 0 && (
