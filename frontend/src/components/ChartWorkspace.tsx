@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Plus, Trash2, LayoutDashboard } from 'lucide-react'
+import { API_URL } from '../config/api'
 import ChartBuilder from './ChartBuilder'
 
 type Column = { name: string; dtype: string }
@@ -45,7 +46,7 @@ export default function ChartWorkspace({ file, columns, filterColumn, filterValu
     setSavedCharts(nextCharts)
     setWorkspaceStatus('')
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/v1/history', {
+      const response = await fetch(`${API_URL}/api/v1/history`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
