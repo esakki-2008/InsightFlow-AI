@@ -492,7 +492,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Dataset Q&A') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Executive Report' || item.label === 'Dataset Q&A') {
                       setActivePage(item.label)
                     }
                   }}
