@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, AlertCircle, FileSpreadsheet, Loader2, UploadCloud, Activity, Sigma } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 type Statistics = {
   overview: { numeric_features_analyzed: number; correlation_pairs_analyzed: number; group_comparisons_analyzed: number }
   distributions: { column: string; count: number; mean: number; median: number; std_dev: number; min: number; q1: number; q3: number; max: number; skewness: number | null; kurtosis: number | null; normality_test: { test: string; statistic: number; p_value: number; interpretation: string } | null }[]
