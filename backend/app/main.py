@@ -158,7 +158,7 @@ async def dataset_statistics_endpoint(file: UploadFile = File(...)):
         else:
             raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
         result = generate_statistical_analysis(dataframe)
-        return {"message": "Advanced statistical analysis completed", "filename": filename, "statistics": result}
+        return {"message": "Advanced statistical analysis completed", "filename": filename, "rows": int(dataframe.shape[0]), "columns": int(dataframe.shape[1]), "statistics": result}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
