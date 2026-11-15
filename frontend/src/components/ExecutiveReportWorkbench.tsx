@@ -18,16 +18,46 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
   const [report, setReport] = useState<Report | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
 
   const generate = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
-    setBusy(true); setError(''); setReport(null)
+    setBusy(true); setError(''); setHistoryStatus(''); setReport(null)
     try {
       const body = new FormData(); body.append('file', file)
       const response = await fetch(`${API_URL}/api/v1/datasets/executive-report`, { method: 'POST', body })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to generate the report.')
-      setReport(payload.report as Report)
+      const generatedReport = payload.report as Report
+      setReport(generatedReport)
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: generatedReport.filename || file.name,
+            analysis_type: 'executive_report',
+            row_count: generatedReport.kpis.rows,
+            column_count: generatedReport.kpis.columns,
+            summary: {
+              quality_score: generatedReport.kpis.quality_score,
+              completeness_percentage: generatedReport.kpis.completeness_percentage,
+              missing_cells: generatedReport.kpis.missing_cells,
+              duplicate_rows: generatedReport.kpis.duplicate_rows,
+              insights_count: generatedReport.kpis.insights_count,
+              correlation_pairs: generatedReport.kpis.correlation_pairs,
+              group_comparisons: generatedReport.kpis.group_comparisons,
+              findings_count: generatedReport.findings.length,
+              recommendations_count: generatedReport.recommendations.length
+            },
+            notes: 'Automatically saved after successful executive report generation.'
+          })
+        })
+        if (!historyResponse.ok) throw new Error('History save failed')
+        setHistoryStatus('This executive report was automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('Report generated, but it could not be saved to Analysis History. Check that the backend is running, then try again.')
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Report generation failed.') }
     finally { setBusy(false) }
   }
@@ -81,7 +111,8 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
           <label className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-violet-400/30 bg-black/20 px-4 py-3"><FileSpreadsheet size={20} className="shrink-0 text-violet-300"/><span className="truncate text-sm text-zinc-200">{file?.name ?? 'Choose a dataset file'}<span className="mt-1 block text-xs text-zinc-500">CSV, XLSX or XLS · Maximum 10 MB</span></span><input className="sr-only" type="file" accept=".csv,.xlsx,.xls" disabled={busy} onChange={e=>{setFile(e.target.files?.[0]??null);setReport(null);setError('')}}/></label>
           <button onClick={generate} disabled={!file||busy} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold hover:bg-violet-500 disabled:opacity-40">{busy?<><Loader2 size={17} className="animate-spin"/>Generating…</>:<><FileText size={17}/>Generate report</>}</button>
         </div>
-        {error&&<p role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={16}/>{error}</p>}
+        {historyStatus&&<p role="status" className="no-print mt-4 rounded-xl border border-violet-500/20 bg-violet-500/5 p-3 text-sm text-violet-200">{historyStatus}</p>}
+      {error&&<p role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={16}/>{error}</p>}
       </section>
       {!report&&<div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center"><FileText size={30} className="mx-auto mb-3 text-zinc-600"/><p className="font-medium text-zinc-300">Your executive report will appear here</p><p className="mt-2 text-sm text-zinc-600">Upload a dataset and generate a report.</p></div>}
       {report&&<>
