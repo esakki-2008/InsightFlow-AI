@@ -6,6 +6,9 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
+from app.database import Base, engine
+from app import models  # Register SQLAlchemy models before table creation.
+
 from app.services.chart_service import generate_chart_data
 from app.services.cleaning_service import (
     apply_cleaning,
@@ -32,6 +35,12 @@ app = FastAPI(
     description="An intelligent AI-powered data analysis platform.",
     version="0.1.0",
 )
+
+@app.on_event("startup")
+def initialize_database():
+    """Create application tables when the API starts."""
+    Base.metadata.create_all(bind=engine)
+
 
 app.add_middleware(
     CORSMiddleware,
