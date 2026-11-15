@@ -125,6 +125,91 @@ async def explore_dataset(
         await file.close()
 
 
+@app.post("/api/v1/datasets/export/analytics.xlsx")
+async def export_analytics_excel(file: UploadFile = File(...)):
+    """Export a multi-sheet Excel analytics report for an uploaded dataset."""
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill
+        from openpyxl.utils import get_column_letter
+
+        filename = file.filename or "dataset"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        report = generate_exploration(dataframe=dataframe, page=1, page_size=25, search="")
+        workbook = Workbook()
+        overview = workbook.active
+        overview.title = "Overview"
+        overview.append(["InsightFlow AI - Analytics Report"])
+        overview.append(["Source file", filename])
+        overview.append(["Metric", "Value"])
+        for key, value in report["overview"].items():
+            overview.append([key.replace("_", " ").title(), value])
+
+        numeric_sheet = workbook.create_sheet("Numeric Summary")
+        numeric_sheet.append(["Feature", "Count", "Mean", "Median", "Std Dev", "Minimum", "Maximum"])
+        for name, stats in report.get("numeric_statistics", {}).items():
+            numeric_sheet.append([name, stats.get("count"), stats.get("mean"), stats.get("median"), stats.get("std"), stats.get("min"), stats.get("max")])
+
+        outlier_sheet = workbook.create_sheet("Outliers")
+        outlier_sheet.append(["Feature", "IQR Outlier Count"])
+        for name, count in report.get("outlier_counts_iqr", {}).items():
+            outlier_sheet.append([name, count])
+
+        category_sheet = workbook.create_sheet("Categorical Distributions")
+        category_sheet.append(["Column", "Value", "Count", "Percentage"])
+        for column, items in report.get("categorical_statistics", {}).items():
+            total = sum(item.get("count", 0) for item in items)
+            for item in items:
+                count = item.get("count", 0)
+                category_sheet.append([column, item.get("value"), count, count / total if total else 0])
+
+        correlation_sheet = workbook.create_sheet("Correlations")
+        correlation_sheet.append(["Feature", *report.get("correlation", {}).keys()])
+        for feature, values in report.get("correlation", {}).items():
+            correlation_sheet.append([feature, *[values.get(name) for name in report.get("correlation", {}).keys()]])
+
+        header_fill = PatternFill("solid", fgColor="312E81")
+        for sheet in workbook.worksheets:
+            sheet.freeze_panes = "A2"
+            sheet.auto_filter.ref = sheet.dimensions if sheet.max_row > 1 else "A1"
+            for cell in sheet[1]:
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.fill = header_fill
+            for column_cells in sheet.columns:
+                max_length = max((len(str(cell.value)) if cell.value is not None else 0) for cell in column_cells)
+                sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max(max_length + 2, 12), 42)
+        for row in category_sheet.iter_rows(min_row=2, min_col=4, max_col=4):
+            row[0].number_format = "0.0%"
+
+        output = BytesIO()
+        workbook.save(output)
+        output.seek(0)
+        safe_name = filename.rsplit(".", 1)[0].replace('"', "")
+        return StreamingResponse(
+            output,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}_analytics.xlsx"'},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Unable to export the analytics workbook.") from exc
+    finally:
+        await file.close()
+
+
 @app.post("/api/v1/datasets/insights")
 async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
     """Generate evidence-backed plain-English insights for an uploaded dataset."""
