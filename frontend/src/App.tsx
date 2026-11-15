@@ -1155,7 +1155,7 @@ function App() {
                 <p className="text-sm text-zinc-400">No datasets available</p>
                 <p className="mt-1 text-xs text-zinc-600">Your inspected datasets will appear here.</p>
               </div>
-            )}}
+            )}
           </section>
 
           <footer className="flex flex-col justify-between gap-2 border-t border-white/5 pt-6 text-xs text-zinc-600 sm:flex-row">
