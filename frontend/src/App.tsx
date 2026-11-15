@@ -99,6 +99,8 @@ interface CleaningPreviewResponse {
 
 function App() {
   const [activePage, setActivePage] = useState('Overview')
+  const [savedModelCount, setSavedModelCount] = useState<number | null>(null)
+  const [modelsLoadError, setModelsLoadError] = useState('')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -128,6 +130,28 @@ function App() {
       return []
     }
   })
+
+  useEffect(() => {
+    let cancelled = false
+    const loadSavedModels = async () => {
+      try {
+        const response = await fetch(`${API_URL}/api/v1/ml/models`)
+        if (!response.ok) throw new Error('Unable to load saved models')
+        const result = await response.json()
+        if (!cancelled) {
+          setSavedModelCount(Number(result.total_models) || 0)
+          setModelsLoadError('')
+        }
+      } catch {
+        if (!cancelled) {
+          setSavedModelCount(null)
+          setModelsLoadError('Backend unavailable')
+        }
+      }
+    }
+    loadSavedModels()
+    return () => { cancelled = true }
+  }, [])
 
   useEffect(() => {
     try {
@@ -389,8 +413,8 @@ function App() {
     },
     {
       label: 'ML Models Trained',
-      value: '—',
-      change: 'Model totals not connected yet',
+      value: savedModelCount === null ? '—' : String(savedModelCount),
+      change: modelsLoadError || (savedModelCount === null ? 'Connecting to backend' : 'Saved model bundles on backend'),
       icon: BrainCircuit,
     },
     {
