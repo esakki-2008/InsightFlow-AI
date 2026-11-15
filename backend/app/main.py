@@ -148,6 +148,15 @@ async def export_analytics_excel(file: UploadFile = File(...)):
             raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
 
         report = generate_exploration(dataframe=dataframe, page=1, page_size=25, search="")
+        identifier_pattern = r"(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)"
+        identifier_columns = [
+            column["name"] for column in report.get("columns", [])
+            if __import__("re").search(identifier_pattern, column["name"], __import__("re").IGNORECASE)
+        ]
+        categorical_statistics = {
+            name: items for name, items in report.get("categorical_statistics", {}).items()
+            if name not in identifier_columns
+        }
         workbook = Workbook()
         overview = workbook.active
         overview.title = "Overview"
@@ -155,7 +164,11 @@ async def export_analytics_excel(file: UploadFile = File(...)):
         overview.append(["Source file", filename])
         overview.append(["Metric", "Value"])
         for key, value in report["overview"].items():
+            if key == "categorical_columns":
+                value = len(categorical_statistics)
             overview.append([key.replace("_", " ").title(), value])
+        overview.append(["Identifier columns", len(identifier_columns)])
+        overview.append(["Identifier fields excluded", ", ".join(identifier_columns) or "None"])
 
         numeric_sheet = workbook.create_sheet("Numeric Summary")
         numeric_sheet.append(["Feature", "Count", "Mean", "Median", "Std Dev", "Minimum", "Maximum"])
@@ -169,7 +182,7 @@ async def export_analytics_excel(file: UploadFile = File(...)):
 
         category_sheet = workbook.create_sheet("Categorical Distributions")
         category_sheet.append(["Column", "Value", "Count", "Percentage"])
-        for column, items in report.get("categorical_statistics", {}).items():
+        for column, items in categorical_statistics.items():
             total = sum(item.get("count", 0) for item in items)
             for item in items:
                 count = item.get("count", 0)
