@@ -30,13 +30,26 @@ type QAResponse = {
 
 type Props = { onBack: () => void }
 
-const examples = [
-  'How many rows are in the dataset?',
-  'How many DDoS records are present?',
-  'What is the average Flow Duration?',
-  'What is the correlation between Flow Bytes/s and Flow Packets/s?',
-  'How many missing values are there?',
-]
+type SuggestionProfile = {
+  rows: number
+  columns: number
+  numeric_columns: string[]
+  categorical_columns: string[]
+  suggestions: string[]
+  column_profile: Array<{
+    name: string
+    type: string
+    missing: number
+    unique_values: number
+  }>
+  method: string
+}
+
+type SuggestionResponse = {
+  message: string
+  filename: string
+  profile: SuggestionProfile
+}
 
 export default function DatasetQAWorkbench({ onBack }: Props) {
   const [file, setFile] = useState<File | null>(null)
@@ -47,6 +60,36 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
   const [mode, setMode] = useState<'standard' | 'advanced'>('standard')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('nvidia/nemotron-3.5-lightning-30b-a3b')
+  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestionProfile, setSuggestionProfile] = useState<SuggestionProfile | null>(null)
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false)
+  const [suggestionsError, setSuggestionsError] = useState('')
+
+  const loadSuggestions = async (selectedFile: File) => {
+    setSuggestionsLoading(true)
+    setSuggestionsError('')
+    setSuggestions([])
+    setSuggestionProfile(null)
+    try {
+      const body = new FormData()
+      body.append('file', selectedFile)
+      const response = await fetch(API_URL + '/api/v1/datasets/suggest-questions', {
+        method: 'POST',
+        body,
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        throw new Error(payload.detail || 'Unable to generate dataset questions.')
+      }
+      const data = payload as SuggestionResponse
+      setSuggestions(data.profile.suggestions ?? [])
+      setSuggestionProfile(data.profile)
+    } catch (err) {
+      setSuggestionsError(err instanceof Error ? err.message : 'Unable to generate dataset questions.')
+    } finally {
+      setSuggestionsLoading(false)
+    }
+  }
 
   const askQuestion = async (nextQuestion?: string) => {
     const prompt = (nextQuestion ?? question).trim()
@@ -182,9 +225,15 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
             accept=".csv,.xlsx,.xls"
             disabled={loading}
             onChange={(event) => {
-              setFile(event.target.files?.[0] ?? null)
+              const selectedFile = event.target.files?.[0] ?? null
+              setFile(selectedFile)
               setHistory([])
               setError('')
+              setQuestion('')
+              setSuggestions([])
+              setSuggestionProfile(null)
+              setSuggestionsError('')
+              if (selectedFile) void loadSuggestions(selectedFile)
             }}
             className="block w-full cursor-pointer rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-zinc-300 file:mr-4 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-violet-500"
           />
@@ -194,12 +243,32 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
         <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6">
           <h3 className="font-semibold">2. Ask a question</h3>
           <p className="mt-1 text-xs text-zinc-500">Try a suggested question or write your own.</p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {examples.map((example) => (
-              <button key={example} type="button" disabled={loading || !file} onClick={() => { setQuestion(example); void askQuestion(example) }} className="rounded-full border border-violet-500/20 bg-violet-500/[0.05] px-3 py-2 text-left text-xs text-violet-200 transition hover:bg-violet-500/15 disabled:cursor-not-allowed disabled:opacity-40">
-                {example}
-              </button>
-            ))}
+          <div className="mt-4 space-y-3">
+            {suggestionsLoading && (
+              <div className="flex items-center gap-2 text-xs text-violet-300">
+                <Loader2 size={14} className="animate-spin" /> Understanding your dataset and generating questions...
+              </div>
+            )}
+            {suggestionsError && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs text-amber-200/80">
+                {suggestionsError}
+              </div>
+            )}
+            {suggestionProfile && (
+              <div className="text-xs text-zinc-500">
+                Generated for {suggestionProfile.rows.toLocaleString()} rows and {suggestionProfile.columns} columns · {suggestionProfile.numeric_columns.length} numeric · {suggestionProfile.categorical_columns.length} categorical
+              </div>
+            )}
+            {suggestions.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((example) => (
+                  <button key={example} type="button" disabled={loading || suggestionsLoading || !file} onClick={() => { setQuestion(example); void askQuestion(example) }} className="rounded-full border border-violet-500/20 bg-violet-500/[0.05] px-3 py-2 text-left text-xs text-violet-200 transition hover:bg-violet-500/15 disabled:cursor-not-allowed disabled:opacity-40">
+                    {example}
+                  </button>
+                ))}
+              </div>
+            )}
+            {!file && <p className="text-xs text-zinc-500">Upload a dataset to generate relevant questions automatically.</p>}
           </div>
           <form className="mt-5" onSubmit={(event) => { event.preventDefault(); void askQuestion() }}>
             <label htmlFor="dataset-question" className="mb-2 block text-sm font-medium text-zinc-300">Your question</label>
