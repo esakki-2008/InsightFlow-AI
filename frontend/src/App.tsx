@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react'
 import DataExplorer from './components/DataExplorer'
 import AnalyticsWorkbench from './components/AnalyticsWorkbench'
+import DataQualityWorkbench from './components/DataQualityWorkbench'
 import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
 import DatasetQAWorkbench from './components/DatasetQAWorkbench'
@@ -195,6 +196,7 @@ function App() {
     { label: 'Overview', icon: LayoutDashboard },
     { label: 'Data Explorer', icon: Database },
     { label: 'Analytics', icon: BarChart3 },
+    { label: 'Data Quality', icon: ShieldCheck },
     { label: 'Machine Learning', icon: BrainCircuit },
     { label: 'AI Insights', icon: Sparkles },
     { label: 'Dataset Q&A', icon: MessageSquareText },
@@ -473,7 +475,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Dataset Q&A') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Dataset Q&A') {
                       setActivePage(item.label)
                     }
                   }}
