@@ -532,7 +532,7 @@ function App() {
           </div>
         </div>
 
-        <div className="px-4 py-7">
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-7 [scrollbar-width:thin]">
           <p className="mb-4 px-3 text-[10px] font-semibold tracking-[2px] text-zinc-600">
             WORKSPACE
           </p>
