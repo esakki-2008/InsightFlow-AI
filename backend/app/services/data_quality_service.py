@@ -35,7 +35,7 @@ def generate_data_quality_report(dataframe: pd.DataFrame) -> dict:
         unique_pct = (unique_count / max(rows, 1)) * 100
         is_constant = unique_count <= 1
         is_identifier = bool(re.search(
-            r"(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)",
+            r"(^id$|(^|[_ -])id($|[_ -])|uuid|guid|identifier|serial|roll[_ -]?no|student[_ -]?no|customer[_ -]?no|account[_ -]?no)",
             str(name), re.IGNORECASE
         ))
         if is_constant:
