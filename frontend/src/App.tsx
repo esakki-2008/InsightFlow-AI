@@ -1,6 +1,7 @@
 
 import { useEffect, useState } from 'react'
-import DataExplorer from './components/DataExplorer'\nimport AnalyticsWorkbench from './components/AnalyticsWorkbench'
+import DataExplorer from './components/DataExplorer'
+import AnalyticsWorkbench from './components/AnalyticsWorkbench'
 import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
 import DatasetQAWorkbench from './components/DatasetQAWorkbench'
@@ -429,7 +430,11 @@ function App() {
     return <DataExplorer onBack={() => setActivePage('Overview')} />
   }
 
-  if (activePage === 'Analytics') {\n    return <AnalyticsWorkbench onBack={() => setActivePage('Overview')} />\n  }\n\n  if (activePage === 'Machine Learning') {
+  if (activePage === 'Analytics') {
+    return <AnalyticsWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
+  if (activePage === 'Machine Learning') {
     return <MLWorkbench onBack={() => setActivePage('Overview')} />
   }
 
