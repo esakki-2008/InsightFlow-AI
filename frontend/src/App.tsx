@@ -6,6 +6,7 @@ import DataQualityWorkbench from './components/DataQualityWorkbench'
 import StatisticalWorkbench from './components/StatisticalWorkbench'
 import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
+import ExecutiveReportWorkbench from './components/ExecutiveReportWorkbench'
 import DatasetQAWorkbench from './components/DatasetQAWorkbench'
 import {
   Activity,
@@ -17,6 +18,7 @@ import {
   Database,
   Download,
   FileSpreadsheet,
+  FileText,
   LayoutDashboard,
   MessageSquareText,
   Loader2,
@@ -201,6 +203,7 @@ function App() {
     { label: 'Statistical Analytics', icon: Activity },
     { label: 'Machine Learning', icon: BrainCircuit },
     { label: 'AI Insights', icon: Sparkles },
+    { label: 'Executive Report', icon: FileText },
     { label: 'Dataset Q&A', icon: MessageSquareText },
   ]
 
@@ -452,6 +455,10 @@ function App() {
 
   if (activePage === 'AI Insights') {
     return <InsightsWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
+  if (activePage === 'Executive Report') {
+    return <ExecutiveReportWorkbench onBack={() => setActivePage('Overview')} />
   }
 
   if (activePage === 'Dataset Q&A') {
