@@ -38,36 +38,39 @@ export default function ChartBuilder({ file, columns, filterColumn, filterValue,
       onChartGenerated?.(chartResult)
       setHistoryStatus('')
 
-      // Save chart configuration and aggregate metadata only, never raw rows.
-      try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            filename: file.name,
-            analysis_type: 'chart_analysis',
-            row_count: chartResult.total_records,
-            column_count: columns.length,
-            summary: {
-              chart_type: chartResult.chart_type,
-              x_column: chartResult.x_column,
-              y_column: chartResult.y_column,
-              aggregation: chartResult.aggregation,
-              points_generated: chartResult.points.length,
-              filtered_records: chartResult.filtered_records ?? chartResult.total_records,
-              filter_column: chartResult.filter_column || null,
-              filter_value: chartResult.filter_value || null,
-              filter_min: chartResult.filter_min || null,
-              filter_max: chartResult.filter_max || null,
-              chart_preview: chartResult.points.slice(0, 20),
-            },
-            notes: 'Chart configuration and aggregate preview saved automatically. Original dataset rows were not stored.',
-          }),
-        })
-        if (!historyResponse.ok) throw new Error('History save request failed')
-        setHistoryStatus('Chart generated and saved to Analysis History.')
-      } catch {
-        setHistoryStatus('Chart generated, but Analysis History could not be saved.')
+      // Standalone charts save their own history. Embedded workspace charts are
+      // persisted by ChartWorkspace to avoid duplicate history records.
+      if (!onChartGenerated) {
+        try {
+          const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              filename: file.name,
+              analysis_type: 'chart_analysis',
+              row_count: chartResult.total_records,
+              column_count: columns.length,
+              summary: {
+                chart_type: chartResult.chart_type,
+                x_column: chartResult.x_column,
+                y_column: chartResult.y_column,
+                aggregation: chartResult.aggregation,
+                points_generated: chartResult.points.length,
+                filtered_records: chartResult.filtered_records ?? chartResult.total_records,
+                filter_column: chartResult.filter_column || null,
+                filter_value: chartResult.filter_value || null,
+                filter_min: chartResult.filter_min || null,
+                filter_max: chartResult.filter_max || null,
+                chart_preview: chartResult.points.slice(0, 20),
+              },
+              notes: 'Chart configuration and aggregate preview saved automatically. Original dataset rows were not stored.',
+            }),
+          })
+          if (!historyResponse.ok) throw new Error('History save request failed')
+          setHistoryStatus('Chart generated and saved to Analysis History.')
+        } catch {
+          setHistoryStatus('Chart generated, but Analysis History could not be saved.')
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not generate chart.')
