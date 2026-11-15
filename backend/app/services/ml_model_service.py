@@ -147,3 +147,35 @@ def predict_with_saved_model(
         },
         "predictions": predictions,
     }
+
+
+
+def list_saved_models() -> dict:
+    """List metadata for model bundles persisted in the local artifact directory."""
+    try:
+        import joblib
+    except ImportError as exc:
+        raise RuntimeError("joblib is required to list saved models.") from exc
+
+    models = []
+    if ARTIFACT_DIR.is_dir():
+        for path in ARTIFACT_DIR.glob("*.joblib"):
+            try:
+                bundle = joblib.load(path)
+                model_id = str(UUID(str(bundle.get("model_id", ""))))
+                if path.stem != model_id:
+                    continue
+                estimators = bundle.get("estimators", {})
+                models.append({
+                    "model_id": model_id,
+                    "created_at": bundle.get("created_at"),
+                    "target_column": bundle.get("target_column"),
+                    "feature_count": len(bundle.get("feature_columns", [])),
+                    "class_labels": bundle.get("class_labels", []),
+                    "model_names": sorted(estimators.keys()),
+                })
+            except Exception:
+                continue
+
+    models.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    return {"total_models": len(models), "models": models}
