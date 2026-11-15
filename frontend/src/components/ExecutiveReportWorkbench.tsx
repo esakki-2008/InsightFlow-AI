@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, FileSpreadsheet, FileText, Loader2, AlertCircle, Sparkles, Download, ShieldCheck } from 'lucide-react'
+import { ArrowLeft, FileSpreadsheet, FileText, Loader2, AlertCircle, Sparkles, Download, ShieldCheck, Printer } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000'
 type Finding = { area: string; priority: string; title: string; detail: string; recommendation: string }
@@ -32,6 +32,8 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
     finally { setBusy(false) }
   }
 
+  const exportPdf = () => window.print()
+
   const download = () => {
     if (!report) return
     const escapeCsv = (value: unknown) => '"' + String(value ?? '').replaceAll('"', '""') + '"'
@@ -49,13 +51,29 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
     const link = document.createElement('a'); link.href = url; link.download = 'insightflow_executive_report.csv'; link.click(); URL.revokeObjectURL(url)
   }
 
-  return <div className="min-h-screen bg-[#09090f] text-zinc-100">
-    <header className="flex h-20 items-center justify-between border-b border-white/5 px-6 lg:px-10">
+  return <div className="executive-report-print min-h-screen bg-[#09090f] text-zinc-100">
+    <style>{`
+      @page { size: A4; margin: 15mm; }
+      @media print {
+        body { background: #fff !important; }
+        .no-print { display: none !important; }
+        .executive-report-print, .executive-report-print main { min-height: 0 !important; background: #fff !important; color: #111827 !important; }
+        .executive-report-print * { color: #111827 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .executive-report-print section, .executive-report-print article, .executive-report-print [class*="rounded-2xl"], .executive-report-print [class*="rounded-xl"] { background: #fff !important; border-color: #d1d5db !important; box-shadow: none !important; }
+        .executive-report-print main { max-width: none !important; padding: 0 !important; gap: 16px !important; }
+        .executive-report-print header { display: none !important; }
+        .executive-report-print h1 { font-size: 24pt !important; }
+        .executive-report-print h2 { break-after: avoid; }
+        .executive-report-print article, .executive-report-print section { break-inside: avoid; }
+        .executive-report-print p, .executive-report-print li { orphans: 2; widows: 2; }
+      }
+    `}</style>
+    <header className="no-print flex h-20 items-center justify-between border-b border-white/5 px-6 lg:px-10">
       <div><p className="text-xs text-zinc-500">Workspace / Executive Report</p><h1 className="mt-1 text-lg font-semibold">AI Executive Report Generator</h1></div>
       <button onClick={onBack} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5"><ArrowLeft size={16}/> Back</button>
     </header>
     <main className="mx-auto max-w-7xl space-y-6 p-6 lg:p-10">
-      <section className="rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.10] to-[#11111b] p-6 sm:p-8">
+      <section className="no-print rounded-2xl border border-violet-500/20 bg-gradient-to-br from-violet-500/[0.10] to-[#11111b] p-6 sm:p-8">
         <div className="flex items-center gap-2 text-sm font-medium tracking-wide text-violet-300"><Sparkles size={17}/> EXECUTIVE INTELLIGENCE</div>
         <h2 className="mt-3 text-3xl font-bold sm:text-4xl">From raw data to clear decisions.</h2>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-400">Generate an executive-ready summary with dataset KPIs, evidence-backed findings, recommended next steps, and analytical limitations. Calculations run locally in the InsightFlow backend.</p>
@@ -67,7 +85,7 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
       </section>
       {!report&&<div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center"><FileText size={30} className="mx-auto mb-3 text-zinc-600"/><p className="font-medium text-zinc-300">Your executive report will appear here</p><p className="mt-2 text-sm text-zinc-600">Upload a dataset and generate a report.</p></div>}
       {report&&<>
-        <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-violet-300">Executive summary</p><h2 className="mt-2 text-xl font-semibold">{report.filename}</h2></div><button onClick={download} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm hover:bg-white/5"><Download size={16}/>Export CSV report</button></div><p className="mt-4 text-sm leading-7 text-zinc-300">{report.summary}</p></section>
+        <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-violet-300">Executive summary</p><h2 className="mt-2 text-xl font-semibold">{report.filename}</h2></div><div className="no-print flex flex-wrap gap-2"><button onClick={exportPdf} className="inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2 text-sm font-semibold text-violet-200 hover:bg-violet-500/20"><Printer size={16}/>Export PDF</button><button onClick={download} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm hover:bg-white/5"><Download size={16}/>Export CSV report</button></div></div><p className="mt-4 text-sm leading-7 text-zinc-300">{report.summary}</p></section>
         <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{Object.entries(report.kpis).map(([key,value])=><div key={key} className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5"><p className="text-xs capitalize text-zinc-500">{key.replaceAll('_',' ')}</p><p className="mt-3 text-2xl font-bold tabular-nums">{typeof value==='number'?value.toLocaleString():value}</p></div>)}</section>
         <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6"><h2 className="font-semibold">Key findings</h2><p className="mt-1 text-xs text-zinc-500">Observations with supporting evidence</p><div className="mt-4 space-y-3">{report.findings.map((x,i)=><article key={i} className="rounded-xl border border-white/[0.06] p-4"><div className="flex flex-wrap justify-between gap-2"><p className="text-xs text-violet-300">{x.area}</p><span className="text-xs capitalize text-zinc-500">{x.priority}</span></div><h3 className="mt-2 font-semibold">{x.title}</h3><p className="mt-2 text-sm leading-6 text-zinc-400">{x.detail}</p><p className="mt-3 text-sm leading-6 text-zinc-300"><strong>Suggested action:</strong> {x.recommendation}</p></article>)}</div>{report.findings.length===0&&<p className="mt-4 text-sm text-zinc-500">No additional findings were generated.</p>}</section>
         <section className="rounded-2xl border border-emerald-500/15 bg-[#11111b] p-6"><h2 className="font-semibold text-emerald-300">Recommended next steps</h2><ol className="mt-4 list-decimal space-y-3 pl-5 text-sm leading-6 text-zinc-300">{report.recommendations.map((x,i)=><li key={i}>{x}</li>)}</ol></section>
