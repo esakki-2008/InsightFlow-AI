@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 type Row = Record<string, unknown>
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
 type CategoryItem = { value: string; count: number }
