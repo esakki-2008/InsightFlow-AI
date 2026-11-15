@@ -9,6 +9,7 @@ import InsightsWorkbench from './components/InsightsWorkbench'
 import ExecutiveReportWorkbench from './components/ExecutiveReportWorkbench'
 import DatasetQAWorkbench from './components/DatasetQAWorkbench'
 import HistoryWorkbench from './components/HistoryWorkbench'
+import DatasetRegistryWorkbench from './components/DatasetRegistryWorkbench'
 import {
   Activity,
   AlertCircle,
@@ -208,6 +209,7 @@ function App() {
     { label: 'Executive Report', icon: FileText },
     { label: 'Dataset Q&A', icon: MessageSquareText },
     { label: 'Analysis History', icon: History },
+    { label: 'Dataset Registry', icon: Database },
   ]
 
   const handleFileChange = (file: File | null) => {
@@ -505,6 +507,10 @@ function App() {
     return <HistoryWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'Dataset Registry') {
+    return <DatasetRegistryWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -532,7 +538,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Executive Report' || item.label === 'Dataset Q&A' || item.label === 'Analysis History') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Executive Report' || item.label === 'Dataset Q&A' || item.label === 'Analysis History' || item.label === 'Dataset Registry') {
                       setActivePage(item.label)
                     }
                   }}
