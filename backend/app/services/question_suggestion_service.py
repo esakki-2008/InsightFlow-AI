@@ -51,6 +51,101 @@ def _looks_like_date(series: pd.Series) -> bool:
     parsed = pd.to_datetime(sample, errors="coerce", format="mixed")
     return float(parsed.notna().mean()) >= 0.8
 
+
+DOMAIN_SIGNATURES = {
+    "sales_business": {
+        "label": "Sales & Business",
+        "terms": ("revenue", "sales", "profit", "product", "customer", "order", "region", "quantity", "discount", "unit price"),
+    },
+    "finance_stock_market": {
+        "label": "Finance & Stock Market",
+        "terms": ("stock", "ticker", "symbol", "open", "high", "low", "close", "market cap", "dividend", "volume", "return"),
+    },
+    "cybersecurity_network": {
+        "label": "Cybersecurity & Network Traffic",
+        "terms": ("flow", "packet", "bytes", "destination port", "source port", "protocol", "flag", "attack", "ddos", "benign", "malware", "intrusion"),
+    },
+    "healthcare": {
+        "label": "Healthcare",
+        "terms": ("patient", "diagnosis", "glucose", "blood pressure", "bmi", "heart rate", "cholesterol", "medical", "hospital", "disease"),
+    },
+    "education": {
+        "label": "Education & Student Performance",
+        "terms": ("student", "grade", "exam", "score", "attendance", "subject", "marks", "gpa", "school", "course"),
+    },
+}
+
+
+def _detect_domain(frame: pd.DataFrame) -> dict:
+    names = [_clean_name(column) for column in frame.columns]
+    # Small value samples help recognize datasets whose headers are generic.
+    samples = []
+    for column in frame.select_dtypes(include=["object", "category"]).columns[:8]:
+        samples.extend(_clean_name(value) for value in frame[column].dropna().astype(str).head(20))
+    haystack = " | ".join(names + samples)
+    scores = {}
+    for domain, signature in DOMAIN_SIGNATURES.items():
+        score = sum(1 for term in signature["terms"] if term in haystack)
+        scores[domain] = score
+    best = max(scores, key=scores.get)
+    if scores[best] < 2:
+        return {"id": "generic", "label": "General Dataset", "confidence": "low", "scores": scores}
+    ordered = sorted(scores.values(), reverse=True)
+    confidence = "high" if scores[best] >= 4 and (len(ordered) == 1 or scores[best] > ordered[1]) else "medium"
+    return {"id": best, "label": DOMAIN_SIGNATURES[best]["label"], "confidence": confidence, "scores": scores}
+
+
+def _domain_suggestions(frame: pd.DataFrame, domain: str, numeric: list[str], categorical: list[str]) -> list[str]:
+    suggestions = []
+    normalized = {_clean_name(column): str(column) for column in frame.columns}
+
+    def find_column(*terms: str) -> str | None:
+        for term in terms:
+            for cleaned, original in normalized.items():
+                if term in cleaned:
+                    return original
+        return None
+
+    if domain == "sales_business":
+        for column in (find_column("revenue", "sales"), find_column("profit"), find_column("quantity"), find_column("discount")):
+            if column and column in numeric:
+                suggestions.append(f"What is the average {column}?")
+        for column in (find_column("product"), find_column("region"), find_column("customer segment")):
+            if column and column in categorical:
+                suggestions.append(f"What is the most common value in {column}?")
+    elif domain == "finance_stock_market":
+        for column in (find_column("close", "adjusted close"), find_column("volume"), find_column("market cap", "market value")):
+            if column and column in numeric:
+                suggestions.append(f"What is the average {column}?")
+        if len(numeric) > 1:
+            suggestions.append(f"What is the correlation between {numeric[0]} and {numeric[1]}?")
+    elif domain == "cybersecurity_network":
+        for column in (find_column("flow duration"), find_column("flow bytes"), find_column("packet"), find_column("destination port")):
+            if column and column in numeric:
+                suggestions.append(f"What is the average {column}?")
+        label = find_column("label", "attack type", "class", "traffic type")
+        if label and label in categorical:
+            suggestions.append(f"What is the most common value in {label}?")
+            values = frame[label].dropna().astype(str).value_counts().head(2).index.tolist()
+            if values:
+                suggestions.append(f"How many {values[0]} records are present?")
+    elif domain == "healthcare":
+        for column in (find_column("glucose"), find_column("blood pressure"), find_column("bmi"), find_column("age"), find_column("heart rate")):
+            if column and column in numeric:
+                suggestions.append(f"What is the average {column}?")
+        category = find_column("diagnosis", "disease", "outcome")
+        if category and category in categorical:
+            suggestions.append(f"What is the most common value in {category}?")
+    elif domain == "education":
+        for column in (find_column("exam score", "marks", "grade", "score"), find_column("attendance"), find_column("gpa")):
+            if column and column in numeric:
+                suggestions.append(f"What is the average {column}?")
+        category = find_column("subject", "course", "grade", "class")
+        if category and category in categorical:
+            suggestions.append(f"What is the most common value in {category}?")
+    return list(dict.fromkeys(suggestions))
+
+
 def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
     """Profile a dataset locally and suggest only questions supported by Standard Q&A."""
     if dataframe.empty:
@@ -85,12 +180,16 @@ def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
         return max(matches, default=0)
 
     numeric = sorted(numeric, key=lambda name: (-score_column(name), name.lower()))
+    domain = _detect_domain(frame)
+    domain_prompts = _domain_suggestions(frame, domain["id"], numeric, categorical)
     suggestions: list[str] = [
         "How many rows are in the dataset?",
         "How many missing values are there?",
         "How many duplicate rows are there?",
         "What columns are available in this dataset?",
     ]
+
+    suggestions.extend(domain_prompts)
 
     if numeric:
         primary = numeric[0]
@@ -143,6 +242,7 @@ def generate_question_suggestions(dataframe: pd.DataFrame) -> dict:
     return {
         "rows": int(rows),
         "columns": int(columns),
+        "domain": domain,
         "numeric_columns": numeric,
         "categorical_columns": categorical,
         "suggestions": suggestions,
