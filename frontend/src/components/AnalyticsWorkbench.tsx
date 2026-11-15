@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle, Printer } from 'lucide-react'
+import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle, Printer, FileDown } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000'
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
@@ -25,9 +25,38 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
   const [filename, setFilename] = useState('')
   const [data, setData] = useState<Exploration | null>(null)
   const [busy, setBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
   const [error, setError] = useState('')
 
   const exportReport = () => window.print()
+  const exportExcel = async () => {
+    if (!file) return
+    setExportBusy(true)
+    setError('')
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const response = await fetch(`${API_URL}/api/v1/datasets/export/analytics.xlsx`, { method: 'POST', body: form })
+      if (!response.ok) {
+        let message = 'Excel report could not be exported.'
+        try { const result = await response.json(); message = result.detail || message } catch { /* keep fallback */ }
+        throw new Error(message)
+      }
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${file.name.replace(/\\.[^.]+$/, '')}_analytics.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to export the Excel report.')
+    } finally {
+      setExportBusy(false)
+    }
+  }
 
   const runAnalytics = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
@@ -106,7 +135,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
       {data && <>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><div className="flex items-center gap-2 text-xs text-zinc-500"><ShieldCheck size={15} className="text-emerald-400"/> Analysis generated from the selected file</div><p className="mt-1 text-sm font-medium text-zinc-300">{filename}</p><p className="mt-1 text-xs text-zinc-600">InsightFlow AI · Analytics report · {new Date().toLocaleString()}</p></div>
-          <button onClick={exportReport} className="no-print inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-500/20"><Printer size={16}/>Export PDF</button>
+          <button onClick={exportReport} className="no-print inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-500/20"><Printer size={16}/>Export PDF</button>\n          <button onClick={exportExcel} disabled={exportBusy} className="no-print inline-flex items-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2.5 text-sm font-semibold text-emerald-200 hover:bg-emerald-500/20 disabled:opacity-50">{exportBusy ? <Loader2 size={16} className="animate-spin"/> : <FileDown size={16}/>}Export Excel</button>
         </div>
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <StatCard label="Total rows" value={fmt(data.overview.total_rows)} note="Dataset records"/><StatCard label="Total columns" value={fmt(data.overview.total_columns)} note="Features"/><StatCard label="Numeric columns" value={fmt(data.overview.numeric_columns)} note="Quantitative"/><StatCard label="Categorical columns" value={fmt(Math.max(0, data.overview.categorical_columns - Object.keys(data.categorical_statistics ?? {}).filter(name => identifierColumns.includes(name)).length))} note="Excludes identifiers"/><StatCard label="Identifier columns" value={fmt(identifierColumns.length)} note="Not charted as categories"/><StatCard label="Missing values" value={fmt(data.overview.missing_values)} note="Null cells"/><StatCard label="Duplicate rows" value={fmt(data.overview.duplicate_rows)} note="Exact duplicates"/>
