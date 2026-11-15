@@ -46,7 +46,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download = `${file.name.replace(/\\.[^.]+$/, '')}_analytics.xlsx`
+      link.download = `${file.name.replace(/\.[^.]+$/, '')}_analytics.xlsx`
       document.body.appendChild(link)
       link.click()
       link.remove()
