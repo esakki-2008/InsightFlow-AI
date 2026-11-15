@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -48,7 +48,6 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('nvidia/nemotron-3.5-lightning-30b-a3b')
 
-  useEffect(() => () => setApiKey(''), [])
 
   const askQuestion = async (nextQuestion?: string) => {
     const prompt = (nextQuestion ?? question).trim()
