@@ -72,23 +72,39 @@ def health_check():
 
 
 @app.post("/api/v1/datasets/upload")
-async def upload_dataset(file: UploadFile = File(...)):
+async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
     try:
         content = await file.read(10 * 1024 * 1024 + 1)
+        result = inspect_dataset(filename=file.filename or "unknown", content=content)
 
-        result = inspect_dataset(
-            filename=file.filename or "unknown",
-            content=content,
+        record = models.DatasetRecord(
+            filename=result["filename"],
+            file_type=result["file_type"],
+            file_size_bytes=result["file_size_bytes"],
+            row_count=result["total_rows"],
+            column_count=result["total_columns"],
+            columns=result["columns"],
+            data_types=result["data_types"],
+            missing_values=result["missing_values"],
+            total_missing_values=result["total_missing_values"],
+            duplicate_rows=result["duplicate_rows"],
         )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        result["registry_id"] = record.id
+        result["registered_at"] = record.created_at.isoformat()
 
         return {
-            "message": "Dataset inspected successfully",
+            "message": "Dataset inspected and registered successfully",
             "dataset": result,
         }
 
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Unable to register dataset metadata.") from exc
     finally:
         await file.close()
 
@@ -928,3 +944,61 @@ def delete_analysis_history(history_id: str, db: Session = Depends(get_db)):
     db.delete(record)
     db.commit()
     return {"message": "Analysis history deleted successfully", "id": history_id}
+
+
+@app.get("/api/v1/datasets/registry")
+def list_dataset_registry(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """List registered dataset metadata, newest first. Source files and rows are never stored."""
+    total = db.query(models.DatasetRecord).count()
+    records = (
+        db.query(models.DatasetRecord)
+        .order_by(models.DatasetRecord.created_at.desc(), models.DatasetRecord.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [_dataset_registry_item(record) for record in records],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/api/v1/datasets/registry/{dataset_id}")
+def get_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db)):
+    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Dataset registry record not found.")
+    return {"item": _dataset_registry_item(record)}
+
+
+@app.delete("/api/v1/datasets/registry/{dataset_id}")
+def delete_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db)):
+    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Dataset registry record not found.")
+    db.delete(record)
+    db.commit()
+    return {"message": "Dataset registry record deleted successfully", "id": dataset_id}
+
+
+def _dataset_registry_item(record: models.DatasetRecord) -> dict:
+    return {
+        "id": record.id,
+        "filename": record.filename,
+        "file_type": record.file_type,
+        "file_size_bytes": record.file_size_bytes,
+        "row_count": record.row_count,
+        "column_count": record.column_count,
+        "columns": record.columns or [],
+        "data_types": record.data_types or {},
+        "missing_values": record.missing_values or {},
+        "total_missing_values": record.total_missing_values,
+        "duplicate_rows": record.duplicate_rows,
+        "created_at": record.created_at.isoformat(),
+    }
