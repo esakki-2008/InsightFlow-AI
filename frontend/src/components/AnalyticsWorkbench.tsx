@@ -27,6 +27,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
   const [busy, setBusy] = useState(false)
   const [exportBusy, setExportBusy] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
 
   const exportReport = () => window.print()
   const exportExcel = async () => {
@@ -60,7 +61,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
 
   const runAnalytics = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
-    setBusy(true); setError(''); setData(null)
+    setBusy(true); setError(''); setHistoryStatus(''); setData(null)
     try {
       const form = new FormData()
       form.append('file', file)
@@ -73,6 +74,35 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
       const payload = result as ExploreResponse
       setData(payload.exploration)
       setFilename(payload.filename)
+
+      try {
+        const overview = payload.exploration.overview
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: payload.filename || file.name,
+            analysis_type: 'analytics_overview',
+            row_count: overview.total_rows,
+            column_count: overview.total_columns,
+            summary: {
+              numeric_columns: overview.numeric_columns,
+              categorical_columns: overview.categorical_columns,
+              missing_values: overview.missing_values,
+              duplicate_rows: overview.duplicate_rows,
+              identifier_columns: payload.exploration.columns.filter(column => /(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)/i.test(column.name)).length,
+            },
+            notes: 'Automatically saved after successful analytics overview generation.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          const historyPayload = await historyResponse.json().catch(() => ({}))
+          throw new Error(historyPayload.detail || 'History save failed.')
+        }
+        setHistoryStatus('This analytics overview was automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('Analytics were generated, but could not be saved to Analysis History. You can still use this report.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to analyze this dataset.')
     } finally { setBusy(false) }
@@ -130,6 +160,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
         </div>
         {file && <p className="mt-3 text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB selected · Your original file is not modified.</p>}
         {error && <p role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300"><AlertCircle size={16}/>{error}</p>}
+        {historyStatus && <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-3 text-sm text-emerald-300">{historyStatus}</p>}
       </section>
       {!data && <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.015] px-6 py-16 text-center"><Database className="mx-auto mb-3 text-zinc-600" size={30}/><p className="font-medium text-zinc-300">Your analytics will appear here</p><p className="mt-2 text-sm text-zinc-600">Select a dataset and generate an analysis to see real statistics.</p></div>}
       {data && <>
@@ -148,7 +179,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
           <div className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5"><h3 className="font-semibold">Categorical distributions</h3><p className="mt-1 text-xs text-zinc-500">Most frequent values per categorical feature</p><div className="mt-5 space-y-5">{categories.map(([column, items]) => { const total = items.reduce((sum, item) => sum + item.count, 0); return <div key={column}><div className="mb-2 text-sm font-medium text-zinc-200">{column}</div><div className="space-y-2">{items.slice(0, 5).map(item => <div key={item.value}><div className="mb-1 flex justify-between gap-3 text-xs"><span className="truncate text-zinc-400">{item.value}</span><span className="text-zinc-500">{item.count.toLocaleString()} · ${(item.count / Math.max(total, 1) * 100).toFixed(1)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-sky-400" style={{ width: `${item.count / Math.max(total, 1) * 100}%` }}/></div></div>)}</div></div> })}{!categories.length && <p className="text-sm text-zinc-500">No categorical distributions available.</p>}</div></div>
           <div className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5"><h3 className="font-semibold">Strong correlations</h3><p className="mt-1 text-xs text-zinc-500">Numeric pairs with absolute Pearson correlation ≥ 0.70</p><div className="mt-5 space-y-3">{correlations.map(pair => <div key={pair.left + pair.right} className="flex items-center justify-between gap-4 rounded-xl bg-white/[0.025] p-3"><div className="min-w-0"><p className="truncate text-xs text-zinc-200">{pair.left}</p><p className="mt-1 truncate text-xs text-zinc-500">with {pair.right}</p></div><span className={`shrink-0 rounded-lg px-2.5 py-1.5 text-xs font-semibold ${pair.value >= 0 ? 'bg-violet-500/10 text-violet-300' : 'bg-sky-500/10 text-sky-300'}`}>{pair.value.toFixed(3)}</span></div>)}{!correlations.length && <p className="text-sm text-zinc-500">No strong numeric correlations found.</p>}</div></div>
         </section>
-        <p className="text-xs leading-5 text-zinc-600">These are descriptive statistics. Outliers and correlations indicate patterns in the selected data; they do not establish causes. This analysis is generated on demand and is not saved as permanent dataset history.</p>
+        <p className="text-xs leading-5 text-zinc-600">These are descriptive statistics. Outliers and correlations indicate patterns in the selected data; they do not establish causes. This analysis is generated on demand; its metadata summary is saved to Analysis History, but raw dataset rows and original files are not stored there.</p>
       </>}
     </main>
   </div>
