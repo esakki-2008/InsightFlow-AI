@@ -23,12 +23,6 @@ type HistoryResponse = {
 }
 
 const labelize = (value: string) => value.replace(/[_-]+/g, ' ').replace(/\b\w/g, char => char.toUpperCase())
-const displayValue = (value: unknown) => {
-  if (value === null || value === undefined || value === '') return '—'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
-}
-
 export default function HistoryWorkbench({ onBack }: { onBack: () => void }) {
   const [items, setItems] = useState<HistoryItem[]>([])
   const [total, setTotal] = useState(0)
