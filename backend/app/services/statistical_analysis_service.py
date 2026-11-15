@@ -7,7 +7,7 @@ from scipy import stats
 
 
 _IDENTIFIER = re.compile(
-    r"(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)",
+    r"(^id$|(^|[_ -])id($|[_ -])|uuid|guid|identifier|serial|roll[_ -]?no|student[_ -]?no|customer[_ -]?no|account[_ -]?no)",
     re.IGNORECASE,
 )
 
