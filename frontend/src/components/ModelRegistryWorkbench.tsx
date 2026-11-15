@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BrainCircuit, RefreshCw, Search, AlertCircle, CheckCircle2, Database, CalendarDays } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 
 interface ModelMetric {
   model: string
