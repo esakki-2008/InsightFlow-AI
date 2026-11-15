@@ -39,18 +39,47 @@ export default function DataQualityWorkbench({ onBack }: { onBack: () => void })
   const [filename, setFilename] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
 
   const runReport = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
-    setBusy(true); setError(''); setReport(null)
+    setBusy(true); setError(''); setReport(null); setHistoryStatus('')
     try {
       const form = new FormData()
       form.append('file', file)
       const response = await fetch(`${API_URL}/api/v1/datasets/quality`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to generate the report.')
-      setReport(result.report as QualityReport)
+      const qualityReport = result.report as QualityReport
+      setReport(qualityReport)
       setFilename(result.filename)
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: result.filename,
+            analysis_type: 'data_quality',
+            row_count: qualityReport.summary.total_rows,
+            column_count: qualityReport.summary.total_columns,
+            summary: {
+              quality_score: qualityReport.summary.quality_score,
+              quality_grade: qualityReport.summary.quality_grade,
+              completeness_percentage: qualityReport.summary.completeness_percentage,
+              missing_cells: qualityReport.summary.missing_cells,
+              duplicate_rows: qualityReport.summary.duplicate_rows,
+              constant_columns: qualityReport.summary.constant_columns,
+              high_missing_columns: qualityReport.summary.high_missing_columns,
+              high_cardinality_columns: qualityReport.summary.high_cardinality_columns,
+            },
+            notes: 'Automatically saved after successful data quality analysis.',
+          }),
+        })
+        if (!historyResponse.ok) throw new Error('History API rejected the record.')
+        setHistoryStatus('This data quality analysis was automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('Report generated, but it could not be saved to Analysis History. You can retry after checking the backend.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to generate the data quality report.')
     } finally { setBusy(false) }
@@ -78,6 +107,7 @@ export default function DataQualityWorkbench({ onBack }: { onBack: () => void })
           </div>
         </div>
         {file && <p className="mt-3 text-xs text-zinc-500">{(file.size / 1024).toFixed(1)} KB selected · Original file remains unchanged.</p>}
+        {historyStatus && <p role="status" className="mt-4 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-xs text-zinc-300">{historyStatus}</p>}
         {error && <p role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300"><AlertCircle size={16}/>{error}</p>}
       </section>
       {report && <>
