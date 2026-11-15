@@ -63,6 +63,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
   const [history, setHistory] = useState<QAResult[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
   const [mode, setMode] = useState<'standard' | 'advanced'>('standard')
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('nvidia/nemotron-3.5-lightning-30b-a3b')
@@ -114,6 +115,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
 
     setLoading(true)
     setError('')
+    setHistoryStatus('')
     try {
       const body = new FormData()
       body.append('file', file)
@@ -131,6 +133,35 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
       const data = payload as QAResponse
       setHistory((current) => [data.qa, ...current])
       setQuestion(prompt)
+      try {
+        const historyResponse = await fetch(API_URL + '/api/v1/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: data.filename || file.name,
+            analysis_type: mode === 'advanced' ? 'dataset_qa_advanced' : 'dataset_qa_standard',
+            row_count: data.qa.rows_analyzed,
+            column_count: suggestionProfile?.columns ?? null,
+            summary: {
+              question: data.qa.question.slice(0, 2000),
+              answer: data.qa.answer.slice(0, 4000),
+              query_type: data.qa.query_type,
+              rows_analyzed: data.qa.rows_analyzed,
+              provider: data.qa.provider ?? (mode === 'standard' ? 'InsightFlow' : null),
+              model: data.qa.model ?? (mode === 'standard' ? 'Standard Pandas' : model),
+              structured_result: data.qa.result,
+            },
+            notes: 'Automatically saved after successful dataset question answering. Raw dataset rows and API keys are not stored.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          const historyPayload = await historyResponse.json().catch(() => ({}))
+          throw new Error(historyPayload.detail || 'History save failed.')
+        }
+        setHistoryStatus('This question and its analysis summary were automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('The answer was generated, but could not be saved to Analysis History. It remains available in this session.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong while asking the question.')
     } finally {
@@ -234,6 +265,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
               const selectedFile = event.target.files?.[0] ?? null
               setFile(selectedFile)
               setHistory([])
+              setHistoryStatus('')
               setError('')
               setQuestion('')
               setSuggestions([])
@@ -300,6 +332,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
             </button>
           </form>
           {error && <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={17} className="mt-0.5 shrink-0" />{error}</div>}
+          {historyStatus && <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{historyStatus}</p>}
         </section>
 
         {history.length > 0 && (
