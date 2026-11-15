@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowLeft, AlertCircle, BarChart3, FileSpreadsheet, Loader2, UploadCloud, Activity, Sigma } from 'lucide-react'
+import { ArrowLeft, AlertCircle, FileSpreadsheet, Loader2, UploadCloud, Activity, Sigma } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000'
 type Statistics = {
