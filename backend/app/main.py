@@ -19,6 +19,7 @@ from app.services.ml_model_service import predict_with_saved_model
 from app.services.ml_explainability_service import explain_prediction
 from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
+from app.services.question_suggestion_service import generate_question_suggestions
 from app.services.llm_provider_service import test_nvidia_connection
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
@@ -196,6 +197,43 @@ async def ask_dataset_question_endpoint(
         raise HTTPException(
             status_code=400,
             detail="Unable to answer this question. Check the dataset and try again.",
+        ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/suggest-questions")
+async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
+    """Profile a dataset locally and return relevant, supported question suggestions."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+
+        profile = generate_question_suggestions(dataframe)
+        return {
+            "message": "Dynamic dataset questions generated successfully",
+            "filename": filename,
+            "profile": profile,
+        }
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to generate questions for this dataset. Check the file and try again.",
         ) from exc
     finally:
         await file.close()
