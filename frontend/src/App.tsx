@@ -8,6 +8,7 @@ import MLWorkbench from './components/MLWorkbench'
 import InsightsWorkbench from './components/InsightsWorkbench'
 import ExecutiveReportWorkbench from './components/ExecutiveReportWorkbench'
 import DatasetQAWorkbench from './components/DatasetQAWorkbench'
+import HistoryWorkbench from './components/HistoryWorkbench'
 import {
   Activity,
   AlertCircle,
@@ -21,6 +22,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquareText,
+  History,
   Loader2,
   RefreshCw,
   Settings,
@@ -205,6 +207,7 @@ function App() {
     { label: 'AI Insights', icon: Sparkles },
     { label: 'Executive Report', icon: FileText },
     { label: 'Dataset Q&A', icon: MessageSquareText },
+    { label: 'Analysis History', icon: History },
   ]
 
   const handleFileChange = (file: File | null) => {
@@ -465,6 +468,10 @@ function App() {
     return <DatasetQAWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'Analysis History') {
+    return <HistoryWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -492,7 +499,7 @@ function App() {
                   key={item.label}
                   type="button"
                   onClick={() => {
-                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Executive Report' || item.label === 'Dataset Q&A') {
+                    if (item.label === 'Overview' || item.label === 'Data Explorer' || item.label === 'Analytics' || item.label === 'Data Quality' || item.label === 'Statistical Analytics' || item.label === 'Machine Learning' || item.label === 'AI Insights' || item.label === 'Executive Report' || item.label === 'Dataset Q&A' || item.label === 'Analysis History') {
                       setActivePage(item.label)
                     }
                   }}
