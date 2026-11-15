@@ -2,12 +2,12 @@
 from io import BytesIO
 
 import pandas as pd
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse\nfrom sqlalchemy.orm import Session
 
-from app.database import Base, engine
-from app import models  # Register SQLAlchemy models before table creation.
+from app.database import Base, engine, get_db
+from app import models  # Register SQLAlchemy models before table creation.\nfrom app.history_schemas import HistoryCreate\nfrom app.models import AnalysisHistory
 
 from app.services.chart_service import generate_chart_data
 from app.services.cleaning_service import (
@@ -845,3 +845,83 @@ async def apply_dataset_cleaning(
 
     finally:
         await file.close()
+
+
+def _history_item(record: AnalysisHistory) -> dict:
+    """Serialize one history row without exposing uploaded dataset contents."""
+    return {
+        "id": record.id,
+        "filename": record.filename,
+        "analysis_type": record.analysis_type,
+        "row_count": record.row_count,
+        "column_count": record.column_count,
+        "summary": record.summary or {},
+        "created_at": record.created_at.isoformat(),
+        "notes": record.notes,
+    }
+
+
+@app.post("/api/v1/history", status_code=201)
+def create_analysis_history(payload: HistoryCreate, db: Session = Depends(get_db)):
+    """Persist analysis metadata and a compact result summary, never raw dataset rows."""
+    import json
+
+    summary_size = len(json.dumps(payload.summary, ensure_ascii=False, default=str).encode("utf-8"))
+    if summary_size > 100_000:
+        raise HTTPException(status_code=413, detail="Summary is too large. Keep it under 100 KB.")
+
+    record = AnalysisHistory(
+        filename=payload.filename,
+        analysis_type=payload.analysis_type,
+        row_count=payload.row_count,
+        column_count=payload.column_count,
+        summary=payload.summary,
+        notes=payload.notes,
+    )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {"message": "Analysis history saved successfully", "item": _history_item(record)}
+
+
+@app.get("/api/v1/history")
+def list_analysis_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    """Return paginated analysis history, newest first."""
+    total = db.query(AnalysisHistory).count()
+    records = (
+        db.query(AnalysisHistory)
+        .order_by(AnalysisHistory.created_at.desc(), AnalysisHistory.id.desc())
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "items": [_history_item(record) for record in records],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@app.get("/api/v1/history/{history_id}")
+def get_analysis_history(history_id: str, db: Session = Depends(get_db)):
+    """Return one saved analysis record."""
+    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Analysis history record not found.")
+    return {"item": _history_item(record)}
+
+
+@app.delete("/api/v1/history/{history_id}")
+def delete_analysis_history(history_id: str, db: Session = Depends(get_db)):
+    """Delete one saved analysis record."""
+    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
+    if record is None:
+        raise HTTPException(status_code=404, detail="Analysis history record not found.")
+    db.delete(record)
+    db.commit()
+    return {"message": "Analysis history deleted successfully", "id": history_id}
