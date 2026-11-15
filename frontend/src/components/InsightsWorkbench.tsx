@@ -63,6 +63,7 @@ export default function InsightsWorkbench({ onBack }: Props) {
   const [result, setResult] = useState<InsightsResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
 
   const generateInsights = async () => {
     if (!file) {
@@ -72,6 +73,7 @@ export default function InsightsWorkbench({ onBack }: Props) {
 
     setLoading(true)
     setError('')
+    setHistoryStatus('')
     setResult(null)
     try {
       const body = new FormData()
@@ -84,7 +86,37 @@ export default function InsightsWorkbench({ onBack }: Props) {
       if (!response.ok) {
         throw new Error(payload.detail || 'Unable to generate dataset insights.')
       }
-      setResult(payload as InsightsResponse)
+      const generated = payload as InsightsResponse
+      setResult(generated)
+
+      try {
+        const summary = generated.insights.summary
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: generated.filename || file.name,
+            analysis_type: 'dataset_insights',
+            row_count: summary.rows,
+            column_count: summary.columns,
+            summary: {
+              numeric_columns: summary.numeric_columns,
+              categorical_columns: summary.categorical_columns,
+              missing_values: summary.missing_values,
+              duplicate_rows: summary.duplicate_rows,
+              insights_generated: summary.insights_generated,
+            },
+            notes: 'Automatically saved after successful dataset insights analysis.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          const historyPayload = await historyResponse.json().catch(() => ({}))
+          throw new Error(historyPayload.detail || 'History save failed.')
+        }
+        setHistoryStatus('This dataset insights analysis was automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('Insights were generated, but could not be saved to Analysis History. You can still use this report.')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong while generating insights.')
     } finally {
@@ -128,6 +160,7 @@ export default function InsightsWorkbench({ onBack }: Props) {
             </button>
           </div>
           {error && <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={17} className="mt-0.5 shrink-0" />{error}</div>}
+          {historyStatus && <div className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{historyStatus}</div>}
         </section>
 
         {result && (
