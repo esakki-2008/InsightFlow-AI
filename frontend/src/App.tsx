@@ -436,6 +436,10 @@ function App() {
     return <AnalyticsWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'Data Quality') {
+    return <DataQualityWorkbench onBack={() => setActivePage('Overview')} />
+  }
+
   if (activePage === 'Machine Learning') {
     return <MLWorkbench onBack={() => setActivePage('Overview')} />
   }
