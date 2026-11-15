@@ -307,6 +307,39 @@ function App() {
       const previewResult = result as CleaningPreviewResponse
       setCleaningPreview(previewResult.cleaning_preview)
       setAnalysisCount((count) => count + 1)
+
+      // Save compact cleaning metadata only; never persist uploaded rows.
+      try {
+        const summary = previewResult.cleaning_preview.summary
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: previewResult.filename || selectedFile.name,
+            analysis_type: 'Data Cleaning',
+            row_count: summary.original_rows,
+            column_count: summary.original_columns,
+            summary: {
+              rows_after_cleaning: summary.preview_rows,
+              columns_after_cleaning: summary.cleaned_columns,
+              duplicate_rows_detected: summary.duplicate_rows_detected,
+              missing_values_before: summary.missing_values_before,
+              missing_values_after: summary.missing_values_after,
+              renamed_columns: previewResult.cleaning_preview.operations.renamed_columns.length,
+              duplicate_rows_to_remove: previewResult.cleaning_preview.operations.duplicates_to_remove,
+              columns_filled: previewResult.cleaning_preview.operations.filled_columns.length,
+              unresolved_columns: previewResult.cleaning_preview.operations.unresolved_columns.length,
+            },
+            notes: 'Cleaning preview metadata saved automatically. Original dataset rows were not stored.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          throw new Error('History save request failed')
+        }
+        setCleaningSuccess('Cleaning preview generated and saved to Analysis History.')
+      } catch {
+        setCleaningSuccess('Cleaning preview generated. Analysis History could not be saved; you can still use the preview.')
+      }
     } catch (error) {
       setPreviewError(
         error instanceof Error
