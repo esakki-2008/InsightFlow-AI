@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle } from 'lucide-react'
+import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle, Printer } from 'lucide-react'
 
 const API_URL = 'http://127.0.0.1:8000'
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
@@ -26,6 +26,8 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
   const [data, setData] = useState<Exploration | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  const exportReport = () => window.print()
 
   const runAnalytics = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
@@ -62,8 +64,25 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
     return pairs.sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 8)
   }, [data])
 
-  return <div className="min-h-screen bg-[#09090f] text-zinc-100">
-    <header className="sticky top-0 z-20 border-b border-white/[0.06] bg-[#0d0d16]/95 backdrop-blur">
+  return <div className="analytics-print min-h-screen bg-[#09090f] text-zinc-100">
+    <style>{`
+      @page { size: A4; margin: 14mm; }
+      @media print {
+        body { background: #fff !important; }
+        .no-print { display: none !important; }
+        .analytics-print, .analytics-print main { min-height: 0 !important; background: #fff !important; color: #111827 !important; }
+        .analytics-print * { color: #111827 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .analytics-print section, .analytics-print [class*="rounded-2xl"] { background: #fff !important; border-color: #d1d5db !important; box-shadow: none !important; }
+        .analytics-print .bg-violet-500, .analytics-print .bg-amber-400, .analytics-print .bg-sky-400 { print-color-adjust: exact; }
+        .analytics-print main { max-width: none !important; padding: 0 !important; }
+        .analytics-print h1 { font-size: 25pt !important; margin-bottom: 8pt !important; }
+        .analytics-print h3 { break-after: avoid; }
+        .analytics-print section, .analytics-print .rounded-xl { break-inside: avoid; }
+        .analytics-print p { orphans: 2; widows: 2; }
+      }
+    `}</style>
+
+    <header className="no-print sticky top-0 z-20 border-b border-white/[0.06] bg-[#0d0d16]/95 backdrop-blur">
       <div className="mx-auto flex h-18 max-w-[1500px] items-center gap-3 px-5 sm:px-8">
         <button onClick={onBack} className="rounded-xl border border-white/10 p-2 text-zinc-400 hover:bg-white/5 hover:text-white" aria-label="Back to overview"><ArrowLeft size={18}/></button>
         <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-600"><BarChart3 size={21}/></div>
@@ -72,7 +91,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
     </header>
     <main className="mx-auto max-w-[1500px] space-y-7 px-5 py-8 sm:px-8 lg:py-10">
       <section><p className="mb-2 flex items-center gap-2 text-xs font-semibold tracking-[2px] text-violet-300"><Sparkles size={14}/> DATA-DRIVEN ANALYTICS</p><h1 className="text-3xl font-bold sm:text-4xl">Analytics overview<span className="text-violet-400">.</span></h1><p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-500">Generate a statistical overview of your dataset, review data quality, compare distributions, and identify strong numeric relationships.</p></section>
-      <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5 sm:p-6">
+      <section className="no-print rounded-2xl border border-white/[0.07] bg-[#11111b] p-5 sm:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/10 p-3 text-violet-300"><UploadCloud size={21}/></div><div><h2 className="font-semibold">Analyze a dataset</h2><p className="mt-1 text-xs text-zinc-500">CSV, XLSX or XLS · maximum 10 MB</p></div></div>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -85,7 +104,10 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
       </section>
       {!data && <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.015] px-6 py-16 text-center"><Database className="mx-auto mb-3 text-zinc-600" size={30}/><p className="font-medium text-zinc-300">Your analytics will appear here</p><p className="mt-2 text-sm text-zinc-600">Select a dataset and generate an analysis to see real statistics.</p></div>}
       {data && <>
-        <div className="flex items-center gap-2 text-xs text-zinc-500"><ShieldCheck size={15} className="text-emerald-400"/> Analysis generated from the selected file · <span className="text-zinc-300">{filename}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><div className="flex items-center gap-2 text-xs text-zinc-500"><ShieldCheck size={15} className="text-emerald-400"/> Analysis generated from the selected file</div><p className="mt-1 text-sm font-medium text-zinc-300">{filename}</p><p className="mt-1 text-xs text-zinc-600">InsightFlow AI · Analytics report · {new Date().toLocaleString()}</p></div>
+          <button onClick={exportReport} className="no-print inline-flex items-center gap-2 rounded-xl border border-violet-400/30 bg-violet-500/10 px-4 py-2.5 text-sm font-semibold text-violet-200 hover:bg-violet-500/20"><Printer size={16}/>Export PDF</button>
+        </div>
         <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
           <StatCard label="Total rows" value={fmt(data.overview.total_rows)} note="Dataset records"/><StatCard label="Total columns" value={fmt(data.overview.total_columns)} note="Features"/><StatCard label="Numeric columns" value={fmt(data.overview.numeric_columns)} note="Quantitative"/><StatCard label="Categorical columns" value={fmt(Math.max(0, data.overview.categorical_columns - Object.keys(data.categorical_statistics ?? {}).filter(name => identifierColumns.includes(name)).length))} note="Excludes identifiers"/><StatCard label="Identifier columns" value={fmt(identifierColumns.length)} note="Not charted as categories"/><StatCard label="Missing values" value={fmt(data.overview.missing_values)} note="Null cells"/><StatCard label="Duplicate rows" value={fmt(data.overview.duplicate_rows)} note="Exact duplicates"/>
         </section>
