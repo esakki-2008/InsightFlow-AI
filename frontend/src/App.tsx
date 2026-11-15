@@ -118,6 +118,17 @@ function App() {
     }
   })
 
+  const [recentDatasets, setRecentDatasets] = useState<DatasetInfo[]>(() => {
+    try {
+      const saved = localStorage.getItem('insightflow_recent_datasets')
+      if (saved) return JSON.parse(saved) as DatasetInfo[]
+      const latest = localStorage.getItem('insightflow_dashboard_dataset')
+      return latest ? [JSON.parse(latest) as DatasetInfo] : []
+    } catch {
+      return []
+    }
+  })
+
   useEffect(() => {
     try {
       if (dataset) {
@@ -137,6 +148,14 @@ function App() {
       // Dashboard remains usable if browser storage is unavailable.
     }
   }, [analysisCount])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('insightflow_recent_datasets', JSON.stringify(recentDatasets))
+    } catch {
+      // Recent dataset history is optional when browser storage is unavailable.
+    }
+  }, [recentDatasets])
 
   const [cleaningPreview, setCleaningPreview] =
     useState<CleaningPreview | null>(null)
@@ -202,6 +221,10 @@ function App() {
 
       const uploadResult = result as UploadResponse
       setDataset(uploadResult.dataset)
+      setRecentDatasets((items) => [
+        uploadResult.dataset,
+        ...items.filter((item) => item.filename !== uploadResult.dataset.filename),
+      ].slice(0, 10))
       setAnalysisCount((count) => count + 1)
     } catch (error) {
       setUploadError(
@@ -354,8 +377,8 @@ function App() {
   const stats = [
     {
       label: 'Datasets Analyzed',
-      value: dataset ? '1' : '0',
-      change: dataset ? 'Current workspace session' : 'Upload a dataset to begin',
+      value: String(recentDatasets.length),
+      change: recentDatasets.length ? 'Saved in this browser' : 'Upload a dataset to begin',
       icon: Database,
     },
     {
@@ -1111,28 +1134,28 @@ function App() {
               <Database className="text-zinc-600" size={20} />
             </div>
 
-            {dataset ? (
-              <div className="mt-5 flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
-                <FileSpreadsheet className="shrink-0 text-violet-400" size={24} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-zinc-200">
-                    {dataset.filename}
-                  </p>
-                  <p className="mt-1 text-xs text-zinc-500">
-                    {dataset.total_rows.toLocaleString()} rows · {dataset.total_columns} columns · {dataset.file_type}
-                  </p>
-                </div>
-                <CheckCircle2 className="shrink-0 text-emerald-400" size={19} />
+            {recentDatasets.length > 0 ? (
+              <div className="mt-5 space-y-3">
+                {recentDatasets.map((item, index) => (
+                  <div key={`${item.filename}-${index}`} className="flex items-center gap-3 rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                    <FileSpreadsheet className="shrink-0 text-violet-400" size={24} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-zinc-200">{item.filename}</p>
+                      <p className="mt-1 text-xs text-zinc-500">
+                        {item.total_rows.toLocaleString()} rows · {item.total_columns} columns · {item.file_type}
+                      </p>
+                    </div>
+                    {index === 0 && <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400">Latest</span>}
+                  </div>
+                ))}
               </div>
             ) : (
               <div className="flex min-h-32 flex-col items-center justify-center text-center">
                 <FileSpreadsheet className="mb-3 text-zinc-600" size={26} />
                 <p className="text-sm text-zinc-400">No datasets available</p>
-                <p className="mt-1 text-xs text-zinc-600">
-                  Your inspected dataset will appear here.
-                </p>
+                <p className="mt-1 text-xs text-zinc-600">Your inspected datasets will appear here.</p>
               </div>
-            )}
+            )}}
           </section>
 
           <footer className="flex flex-col justify-between gap-2 border-t border-white/5 pt-6 text-xs text-zinc-600 sm:flex-row">
