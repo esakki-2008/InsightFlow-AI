@@ -15,7 +15,7 @@ from app.services.dataset_service import inspect_dataset
 from app.services.exploration_service import generate_exploration
 from app.services.ml_preparation_service import prepare_classification_dataset
 from app.services.ml_training_service import train_classification_models
-from app.services.ml_model_service import predict_with_saved_model
+from app.services.ml_model_service import predict_with_saved_model, list_saved_models
 from app.services.ml_explainability_service import explain_prediction
 from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
@@ -397,6 +397,15 @@ async def train_ml_models(
         ) from exc
     finally:
         await file.close()
+
+
+@app.get("/api/v1/ml/models")
+def get_saved_ml_models():
+    """Return metadata for models currently saved on this backend instance."""
+    try:
+        return list_saved_models()
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/ml/predict")
