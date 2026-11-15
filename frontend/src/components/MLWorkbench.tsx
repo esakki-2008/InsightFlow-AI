@@ -132,12 +132,14 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
   const [randomState, setRandomState] = useState('42')
   const [isTraining, setIsTraining] = useState(false)
   const [trainingError, setTrainingError] = useState('')
+  const [trainingHistoryStatus, setTrainingHistoryStatus] = useState('')
   const [trainingResult, setTrainingResult] = useState<TrainingResponse | null>(null)
 
   const [predictionFile, setPredictionFile] = useState<File | null>(null)
   const [selectedModel, setSelectedModel] = useState('Random Forest')
   const [isPredicting, setIsPredicting] = useState(false)
   const [predictionError, setPredictionError] = useState('')
+  const [predictionHistoryStatus, setPredictionHistoryStatus] = useState('')
   const [predictionResult, setPredictionResult] = useState<PredictionResponse | null>(null)
   const [explanationRow, setExplanationRow] = useState('1')
   const [isExplaining, setIsExplaining] = useState(false)
@@ -161,6 +163,7 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
 
     setIsTraining(true)
     setTrainingError('')
+    setTrainingHistoryStatus('')
     setTrainingResult(null)
     setPredictionResult(null)
     setPredictionError('')
@@ -176,7 +179,39 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       const response = await fetch(`${API_URL}/api/v1/ml/train`, { method: 'POST', body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Model training failed.')
-      setTrainingResult(result as TrainingResponse)
+      const generated = result as TrainingResponse
+      setTrainingResult(generated)
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: generated.filename || trainingFile.name,
+            analysis_type: 'ml_training',
+            row_count: generated.preparation.total_rows ?? generated.preparation.usable_rows ?? null,
+            column_count: generated.preparation.feature_count !== undefined ? generated.preparation.feature_count + 1 : null,
+            summary: {
+              model_id: generated.training.model_id,
+              models_trained: generated.training.models_trained,
+              feature_count: generated.training.feature_count,
+              test_rows: generated.training.test_rows,
+              target_column: generated.preparation.target_column ?? targetColumn.trim(),
+              target_classes: generated.training.class_labels,
+              best_model: generated.training.results[0]?.model ?? null,
+              best_accuracy: generated.training.results[0]?.accuracy ?? null,
+              best_macro_f1: generated.training.results[0]?.f1_macro ?? null,
+            },
+            notes: 'Automatically saved after successful ML model training. Model artifacts remain in backend file storage.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          const historyPayload = await historyResponse.json().catch(() => ({}))
+          throw new Error(historyPayload.detail || 'History save failed.')
+        }
+        setTrainingHistoryStatus('This ML training run was automatically saved to Analysis History.')
+      } catch {
+        setTrainingHistoryStatus('Models were trained, but the run could not be saved to Analysis History. Your saved model bundle is still available.')
+      }
     } catch (error) {
       setTrainingError(error instanceof Error ? error.message : 'Unable to train models.')
     } finally {
@@ -196,6 +231,7 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
 
     setIsPredicting(true)
     setPredictionError('')
+    setPredictionHistoryStatus('')
     setPredictionResult(null)
     try {
       const body = new FormData()
@@ -205,7 +241,37 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       const response = await fetch(`${API_URL}/api/v1/ml/predict`, { method: 'POST', body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Prediction failed.')
-      setPredictionResult(result as PredictionResponse)
+      const generated = result as PredictionResponse
+      setPredictionResult(generated)
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: generated.filename || predictionFile.name,
+            analysis_type: 'ml_prediction',
+            row_count: generated.prediction.rows_predicted,
+            column_count: generated.prediction.feature_count,
+            summary: {
+              model_id: generated.prediction.model_id,
+              model_name: generated.prediction.model_name,
+              target_column: generated.prediction.target_column,
+              rows_predicted: generated.prediction.rows_predicted,
+              feature_count: generated.prediction.feature_count,
+              missing_feature_values_filled: generated.prediction.missing_feature_values_filled,
+              prediction_distribution: generated.prediction.prediction_distribution,
+            },
+            notes: 'Automatically saved after successful ML prediction. Individual source rows and prediction records are not stored in history.',
+          }),
+        })
+        if (!historyResponse.ok) {
+          const historyPayload = await historyResponse.json().catch(() => ({}))
+          throw new Error(historyPayload.detail || 'History save failed.')
+        }
+        setPredictionHistoryStatus('This prediction run was automatically saved to Analysis History.')
+      } catch {
+        setPredictionHistoryStatus('Predictions were generated, but the run could not be saved to Analysis History. You can still export the results.')
+      }
       setExplanationRow('1')
       setExplanationResult(null)
       setExplanationError('')
@@ -319,6 +385,7 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
             {isTraining ? <><Loader2 size={17} className="animate-spin" /> Training models...</> : <><Play size={17} /> Train 3 models</>}
           </button>
           {trainingError && <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={17} className="mt-0.5 shrink-0" />{trainingError}</div>}
+          {trainingHistoryStatus && <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{trainingHistoryStatus}</p>}
         </section>
 
         {trainingResult && (
@@ -443,6 +510,7 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
                 {isPredicting ? <><Loader2 size={17} className="animate-spin" /> Predicting...</> : <><Play size={17} /> Run predictions</>}
               </button>
               {predictionError && <div className="mt-4 flex items-start gap-2 rounded-xl border border-red-500/20 bg-red-500/5 p-3 text-sm text-red-300"><AlertCircle size={17} className="mt-0.5 shrink-0" />{predictionError}</div>}
+              {predictionHistoryStatus && <p className="mt-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-3 text-sm text-emerald-300">{predictionHistoryStatus}</p>}
             </section>
           </>
         )}
