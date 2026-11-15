@@ -10,7 +10,7 @@ type Statistics = {
   methodology: Record<string, string>
 }
 const fmt = (value: number | null) => value === null ? '—' : value.toLocaleString(undefined, { maximumFractionDigits: 4 })
-const fmtP = (value: number) => value < 0.0001 ? value.toExponential(2) : value.toFixed(6).replace(/0+$/, '').replace(/\\.$/, '')
+const fmtP = (value: number) => value === 0 ? '< 1e-300' : value < 0.0001 ? value.toExponential(2) : value.toFixed(6).replace(/0+$/, '').replace(/\\.$/, '')
 function Card({ title, value, note }: { title: string; value: string; note: string }) { return <div className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5"><p className="text-xs text-zinc-500">{title}</p><p className="mt-3 text-2xl font-bold text-white">{value}</p><p className="mt-2 text-xs text-zinc-600">{note}</p></div> }
 
 export default function StatisticalWorkbench({ onBack }: { onBack: () => void }) {
