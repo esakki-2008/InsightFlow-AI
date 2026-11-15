@@ -49,3 +49,24 @@ class DatasetRecord(Base):
         default=lambda: datetime.now(timezone.utc),
         index=True,
     )
+
+
+class MLModelRecord(Base):
+    """Persistent metadata for a trained model bundle; estimator binaries remain in artifacts."""
+
+    __tablename__ = "ml_model_registry"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    dataset_filename: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    target_column: Mapped[str] = mapped_column(String(255), nullable=False)
+    feature_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    test_rows: Mapped[int] = mapped_column(Integer, nullable=False)
+    class_labels: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    model_names: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    metrics: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+        index=True,
+    )
