@@ -48,7 +48,6 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
   const [apiKey, setApiKey] = useState('')
   const [model, setModel] = useState('nvidia/nemotron-3.5-lightning-30b-a3b')
 
-
   const askQuestion = async (nextQuestion?: string) => {
     const prompt = (nextQuestion ?? question).trim()
     if (!file) {
@@ -90,10 +89,20 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
     }
   }
 
-  const formatValue = (value: unknown) => {
+  const formatValue = (value: unknown): string => {
     if (value === null || value === undefined) return '—'
     if (typeof value === 'number') return value.toLocaleString()
-    if (Array.isArray(value)) return value.length ? value.join(', ') : 'None'
+    if (Array.isArray(value)) {
+      if (!value.length) return 'None'
+      return value.map((item) => {
+        if (item !== null && typeof item === 'object') {
+          return Object.entries(item as Record<string, unknown>)
+            .map(([key, nestedValue]) => `${key.replaceAll('_', ' ')}: ${formatValue(nestedValue)}`)
+            .join(' · ')
+        }
+        return formatValue(item)
+      }).join(' | ')
+    }
     if (typeof value === 'object') return JSON.stringify(value)
     return String(value)
   }
