@@ -148,7 +148,7 @@ async def export_analytics_excel(file: UploadFile = File(...)):
             raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
 
         report = generate_exploration(dataframe=dataframe, page=1, page_size=25, search="")
-        identifier_pattern = r"(^id$|(^|[_\\s-])id($|[_\\s-])|uuid|guid|identifier|serial|roll[_\\s-]?no|student[_\\s-]?no|customer[_\\s-]?no|account[_\\s-]?no)"
+        identifier_pattern = r"(^id$|(^|[_\s-])id($|[_\s-])|uuid|guid|identifier|serial|roll[_\s-]?no|student[_\s-]?no|customer[_\s-]?no|account[_\s-]?no)"
         identifier_columns = [
             column["name"] for column in report.get("columns", [])
             if __import__("re").search(identifier_pattern, column["name"], __import__("re").IGNORECASE)
