@@ -195,6 +195,63 @@ def _validate_and_execute(frame: pd.DataFrame, plan: dict) -> dict:
     raise ValueError("That analysis operation is not available.")
 
 
+
+def _infer_group_comparison_plan(frame: pd.DataFrame, question: str) -> dict | None:
+    """Deterministically recognize common group-comparison requests before LLM planning."""
+    lowered = question.casefold()
+    comparison_terms = ("compare", "comparison", "between", "versus", "vs.")
+    aggregation_patterns = {
+        "mean": ("average", "mean"),
+        "median": ("median",),
+        "min": ("minimum", "lowest", "smallest"),
+        "max": ("maximum", "highest", "largest"),
+        "sum": ("total", "sum"),
+        "std": ("standard deviation", "std"),
+    }
+    if not any(term in lowered for term in comparison_terms):
+        return None
+
+    aggregation = next(
+        (operation for operation, terms in aggregation_patterns.items()
+         if any(re.search(r"\\b" + re.escape(term) + r"\\b", lowered) for term in terms)),
+        None,
+    )
+    if aggregation is None:
+        return None
+
+    numeric_column = next(
+        (str(column) for column in frame.columns
+         if pd.api.types.is_numeric_dtype(frame[column])
+         and str(column).casefold() in lowered),
+        None,
+    )
+    if numeric_column is None:
+        return None
+
+    mentioned_groups = []
+    candidate_group_column = None
+    for column in frame.columns:
+        series = frame[column]
+        if pd.api.types.is_numeric_dtype(series):
+            continue
+        values = series.dropna().astype(str).unique().tolist()
+        matched = [
+            value for value in values
+            if re.search(r"(?<![\\w])" + re.escape(value.casefold()) + r"(?![\\w])", lowered)
+        ]
+        if len(matched) >= 2 and len(matched) > len(mentioned_groups):
+            mentioned_groups = matched
+            candidate_group_column = str(column)
+
+    if candidate_group_column is None:
+        return None
+    return {
+        "operation": "group_aggregation",
+        "group_by_column": candidate_group_column,
+        "column": numeric_column,
+        "aggregation": aggregation,
+    }
+
 def answer_advanced_dataset_question(
     dataframe: pd.DataFrame,
     question: str,
@@ -243,12 +300,16 @@ def answer_advanced_dataset_question(
         "question": prompt,
         "required_output": "one JSON object only",
     }, ensure_ascii=False)
-    plan_text = _nvidia_chat(
-        key, selected_model,
-        [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
-        max_tokens=500,
-    )
-    plan = _extract_json(plan_text)
+    # Prefer deterministic routing for explicit group comparisons. This prevents
+    # a planner from silently answering with an overall aggregate instead.
+    plan = _infer_group_comparison_plan(frame, prompt)
+    if plan is None:
+        plan_text = _nvidia_chat(
+            key, selected_model,
+            [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            max_tokens=500,
+        )
+        plan = _extract_json(plan_text)
     result = _validate_and_execute(frame, plan)
 
     explanation_prompt = (
