@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle, Printer, FileDown } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
 type CategoryItem = { value: string; count: number }
 interface Exploration {
