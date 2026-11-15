@@ -103,6 +103,7 @@ function App() {
   const [isUploading, setIsUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [dataset, setDataset] = useState<DatasetInfo | null>(null)
+  const [analysisCount, setAnalysisCount] = useState(0)
 
   const [cleaningPreview, setCleaningPreview] =
     useState<CleaningPreview | null>(null)
@@ -168,6 +169,7 @@ function App() {
 
       const uploadResult = result as UploadResponse
       setDataset(uploadResult.dataset)
+      setAnalysisCount((count) => count + 1)
     } catch (error) {
       setUploadError(
         error instanceof Error
@@ -213,6 +215,7 @@ function App() {
 
       const previewResult = result as CleaningPreviewResponse
       setCleaningPreview(previewResult.cleaning_preview)
+      setAnalysisCount((count) => count + 1)
     } catch (error) {
       setPreviewError(
         error instanceof Error
@@ -303,36 +306,41 @@ function App() {
     return String(value)
   }
 
+  const dataCompleteness = dataset
+    ? Math.max(
+        0,
+        Math.round(
+          (1 -
+            dataset.total_missing_values /
+              Math.max(dataset.total_rows * dataset.total_columns, 1)) *
+            100,
+        ),
+      )
+    : null
+
   const stats = [
     {
       label: 'Datasets Analyzed',
       value: dataset ? '1' : '0',
-      change: dataset ? '1 dataset inspected' : 'No datasets yet',
+      change: dataset ? 'Current workspace session' : 'Upload a dataset to begin',
       icon: Database,
     },
     {
       label: 'Analyses Completed',
-      value: dataset ? '1' : '0',
-      change: dataset ? 'Dataset inspection complete' : 'Ready to get started',
+      value: String(analysisCount),
+      change: analysisCount ? 'Inspections and cleaning previews this session' : 'No analyses in this session yet',
       icon: Activity,
     },
     {
       label: 'ML Models Trained',
-      value: '0',
-      change: 'Coming soon',
+      value: 'Open',
+      change: 'View saved models in Machine Learning',
       icon: BrainCircuit,
     },
     {
-      label: 'Data Quality',
-      value: dataset
-        ? `${Math.round(
-            (1 -
-              dataset.total_missing_values /
-                Math.max(dataset.total_rows * dataset.total_columns, 1)) *
-              100,
-          )}%`
-        : '—',
-      change: dataset ? 'Based on missing-value count' : 'Awaiting dataset',
+      label: 'Data Completeness',
+      value: dataCompleteness === null ? '—' : `${dataCompleteness}%`,
+      change: dataset ? 'Based on non-missing cells' : 'Awaiting dataset',
       icon: ShieldCheck,
     },
   ]
@@ -621,19 +629,36 @@ function App() {
                 Your dataset inspection activity
               </p>
 
-              <div className="mt-8 flex min-h-44 flex-col items-center justify-center rounded-xl border border-white/5 bg-white/[0.015] text-center">
-                <div className="mb-3 rounded-full bg-zinc-800/70 p-4 text-zinc-500">
-                  <BarChart3 size={27} />
+              {dataset ? (
+                <div className="mt-6 space-y-4">
+                  <div className="rounded-xl border border-white/5 bg-white/[0.02] p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-200">Latest dataset inspection</p>
+                        <p className="mt-1 max-w-xs truncate text-xs text-zinc-500">{dataset.filename}</p>
+                      </div>
+                      <CheckCircle2 className="shrink-0 text-emerald-400" size={20} />
+                    </div>
+                    <div className="mt-4 grid grid-cols-2 gap-3">
+                      <div><p className="text-xl font-bold">{dataset.total_rows.toLocaleString()}</p><p className="text-xs text-zinc-500">Rows</p></div>
+                      <div><p className="text-xl font-bold">{dataset.total_columns}</p><p className="text-xs text-zinc-500">Columns</p></div>
+                      <div><p className="text-xl font-bold">{dataset.total_missing_values.toLocaleString()}</p><p className="text-xs text-zinc-500">Missing cells</p></div>
+                      <div><p className="text-xl font-bold">{dataset.duplicate_rows.toLocaleString()}</p><p className="text-xs text-zinc-500">Duplicate rows</p></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 flex justify-between text-xs"><span className="text-zinc-400">Data completeness</span><span className="font-semibold text-emerald-400">{dataCompleteness}%</span></div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${dataCompleteness}%` }} /></div>
+                  </div>
+                  <p className="text-[11px] text-zinc-600">Session activity only. Dataset history and ML model totals will be connected after persistent storage is implemented.</p>
                 </div>
-                <p className="text-sm font-medium text-zinc-400">
-                  {dataset ? 'Inspection complete' : 'No analysis yet'}
-                </p>
-                <p className="mt-2 max-w-52 text-xs leading-relaxed text-zinc-600">
-                  {dataset
-                    ? `${dataset.total_rows.toLocaleString()} rows and ${dataset.total_columns} columns inspected.`
-                    : 'Upload a dataset to begin exploring your data.'}
-                </p>
-              </div>
+              ) : (
+                <div className="mt-8 flex min-h-44 flex-col items-center justify-center rounded-xl border border-white/5 bg-white/[0.015] text-center">
+                  <div className="mb-3 rounded-full bg-zinc-800/70 p-4 text-zinc-500"><BarChart3 size={27} /></div>
+                  <p className="text-sm font-medium text-zinc-400">No analysis yet</p>
+                  <p className="mt-2 max-w-52 text-xs leading-relaxed text-zinc-600">Upload a dataset to see real inspection statistics and completeness.</p>
+                </div>
+              )}
             </div>
           </section>
 
