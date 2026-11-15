@@ -13,6 +13,7 @@ from app.services.cleaning_service import (
 )
 from app.services.dataset_service import inspect_dataset
 from app.services.exploration_service import generate_exploration
+from app.services.data_quality_service import generate_data_quality_report
 from app.services.ml_preparation_service import prepare_classification_dataset
 from app.services.ml_training_service import train_classification_models
 from app.services.ml_model_service import predict_with_saved_model, list_saved_models
@@ -121,6 +122,33 @@ async def explore_dataset(
             status_code=400,
             detail="Unable to explore this dataset. Check the file and try again.",
         ) from exc
+    finally:
+        await file.close()
+
+
+@app.post("/api/v1/datasets/quality")
+async def dataset_quality_endpoint(file: UploadFile = File(...)):
+    """Generate an overall and column-level data quality report."""
+    try:
+        filename = file.filename or "unknown"
+        content = await file.read(10 * 1024 * 1024 + 1)
+        inspect_dataset(filename=filename, content=content)
+        extension = filename.lower().rsplit(".", 1)[-1]
+        if extension == "csv":
+            try:
+                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
+            except UnicodeDecodeError:
+                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
+        elif extension in ("xlsx", "xls"):
+            dataframe = pd.read_excel(BytesIO(content))
+        else:
+            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
+        report = generate_data_quality_report(dataframe)
+        return {"message": "Data quality report generated successfully", "filename": filename, "report": report}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail="Unable to generate the data quality report. Check the file and try again.") from exc
     finally:
         await file.close()
 
