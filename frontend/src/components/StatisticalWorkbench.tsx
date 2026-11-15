@@ -18,15 +18,41 @@ export default function StatisticalWorkbench({ onBack }: { onBack: () => void })
   const [data, setData] = useState<Statistics | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [historyStatus, setHistoryStatus] = useState('')
   const run = async () => {
     if (!file) { setError('Choose a CSV or Excel dataset first.'); return }
-    setBusy(true); setError(''); setData(null)
+    setBusy(true); setError(''); setHistoryStatus(''); setData(null)
     try {
       const form = new FormData(); form.append('file', file)
       const response = await fetch(`${API_URL}/api/v1/datasets/statistics`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Statistical analysis failed.')
-      setData(result.statistics as Statistics)
+      const statistics = result.statistics as Statistics
+      setData(statistics)
+      try {
+        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            analysis_type: 'statistical_analysis',
+            row_count: result.rows ?? null,
+            column_count: result.columns ?? null,
+            summary: {
+              numeric_features_analyzed: statistics.overview.numeric_features_analyzed,
+              correlation_pairs_analyzed: statistics.overview.correlation_pairs_analyzed,
+              group_comparisons_analyzed: statistics.overview.group_comparisons_analyzed,
+              significant_correlations: statistics.correlations.filter(item => item.significant_at_5_percent).length,
+              significant_group_comparisons: statistics.group_comparisons.filter(item => item.significant_at_5_percent).length
+            },
+            notes: 'Automatically saved after successful statistical analysis.'
+          })
+        })
+        if (!historyResponse.ok) throw new Error('History save failed')
+        setHistoryStatus('This statistical analysis was automatically saved to Analysis History.')
+      } catch {
+        setHistoryStatus('Analysis completed, but it could not be saved to Analysis History. You can retry from the History page after checking the backend.')
+      }
     } catch (err) { setError(err instanceof Error ? err.message : 'Unable to analyze this dataset.') }
     finally { setBusy(false) }
   }
@@ -35,6 +61,7 @@ export default function StatisticalWorkbench({ onBack }: { onBack: () => void })
     <main className="mx-auto max-w-[1500px] space-y-7 px-5 py-8 sm:px-8 lg:py-10">
       <section><p className="mb-2 text-xs font-semibold tracking-[2px] text-violet-300">ADVANCED ANALYTICS</p><h1 className="text-3xl font-bold sm:text-4xl">Statistical analysis<span className="text-violet-400">.</span></h1><p className="mt-3 max-w-3xl text-sm leading-6 text-zinc-500">Explore distribution shape, normality tests, Pearson and Spearman relationships, and differences between categorical groups.</p></section>
       <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-5"><div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between"><div className="flex items-center gap-3"><div className="rounded-xl bg-violet-500/10 p-3 text-violet-300"><UploadCloud size={21}/></div><div><h2 className="font-semibold">Analyze a dataset</h2><p className="mt-1 text-xs text-zinc-500">CSV, XLSX or XLS · maximum 10 MB</p></div></div><div className="flex flex-col gap-3 sm:flex-row sm:items-center"><label className="flex min-w-0 cursor-pointer items-center gap-3 rounded-xl border border-dashed border-white/15 px-4 py-3 sm:min-w-[330px]"><FileSpreadsheet size={19} className="shrink-0 text-violet-300"/><span className="min-w-0 flex-1 truncate text-sm text-zinc-300">{file ? file.name : 'Choose a dataset file'}</span><input type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => { setFile(e.target.files?.[0] ?? null); setData(null); setError('') }}/></label><button onClick={run} disabled={!file || busy} className="inline-flex items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-3 text-sm font-semibold text-white hover:bg-violet-500 disabled:opacity-40">{busy ? <><Loader2 size={17} className="animate-spin"/>Analyzing…</> : <><Activity size={17}/>Run statistics</>}</button></div></div>{error && <p role="alert" className="mt-4 flex items-center gap-2 rounded-xl border border-red-500/20 bg-red-500/5 px-4 py-3 text-sm text-red-300"><AlertCircle size={16}/>{error}</p>}</section>
+      {historyStatus && <p role="status" className="rounded-xl border border-violet-500/20 bg-violet-500/5 px-4 py-3 text-sm text-violet-200">{historyStatus}</p>}
       {!data && <div className="rounded-2xl border border-dashed border-white/10 px-6 py-16 text-center"><Sigma className="mx-auto mb-3 text-zinc-600" size={30}/><p className="font-medium text-zinc-300">Statistical results will appear here</p><p className="mt-2 text-sm text-zinc-600">Upload a dataset to calculate statistical tests and relationships.</p></div>}
       {data && <>
         <section className="grid gap-3 sm:grid-cols-3"><Card title="Numeric features" value={String(data.overview.numeric_features_analyzed)} note="Distribution profiles"/><Card title="Correlation pairs" value={String(data.overview.correlation_pairs_analyzed)} note="Pearson and Spearman tests"/><Card title="Group comparisons" value={String(data.overview.group_comparisons_analyzed)} note="One-way ANOVA"/></section>
