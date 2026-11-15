@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, ShieldCheck, UploadCloud, AlertTriangle, Info } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 
 type ColumnProfile = {
   name: string
