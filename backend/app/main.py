@@ -19,6 +19,7 @@ from app.services.ml_model_service import predict_with_saved_model
 from app.services.ml_explainability_service import explain_prediction
 from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
+from app.services.llm_provider_service import test_nvidia_connection
 
 
 app = FastAPI(
@@ -197,6 +198,18 @@ async def ask_dataset_question_endpoint(
         ) from exc
     finally:
         await file.close()
+
+
+@app.post("/api/v1/ai/providers/nvidia/test")
+async def test_nvidia_provider_endpoint(
+    api_key: str = Form(...),
+    model: str = Form("meta/llama-3.3-70b-instruct"),
+):
+    """Test a user-supplied NVIDIA API key without persisting it."""
+    try:
+        return test_nvidia_connection(api_key=api_key, model=model)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/ml/prepare")
