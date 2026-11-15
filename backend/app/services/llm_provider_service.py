@@ -29,9 +29,10 @@ def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> d
                 "content": "Reply with exactly: InsightFlow connection successful",
             }
         ],
-        "max_tokens": 32,
+        "max_tokens": 128,
         "temperature": 0,
         "stream": False,
+        "extra_body": {"chat_template_kwargs": {"enable_thinking": False}},
     }
     request = Request(
         NVIDIA_CHAT_COMPLETIONS_URL,
@@ -62,8 +63,22 @@ def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> d
         raise ValueError("NVIDIA returned an unexpected response.") from exc
 
     choices = result.get("choices") or []
-    if not choices or not isinstance(choices[0].get("message", {}).get("content"), str):
-        raise ValueError("NVIDIA responded, but no text response was returned.")
+    if not choices or not isinstance(choices[0], dict):
+        raise ValueError("NVIDIA returned no completion choices.")
+
+    message = choices[0].get("message") or {}
+    content = message.get("content")
+    reasoning_content = message.get("reasoning_content")
+
+    # Some reasoning models return their reasoning separately from the final text.
+    # For a connection smoke test, either non-empty text field confirms a response.
+    has_content = isinstance(content, str) and bool(content.strip())
+    has_reasoning = isinstance(reasoning_content, str) and bool(reasoning_content.strip())
+    if not has_content and not has_reasoning:
+        finish_reason = choices[0].get("finish_reason")
+        if finish_reason == "length":
+            raise ValueError("NVIDIA reached the token limit before returning text. Increase max_tokens and retry.")
+        raise ValueError("NVIDIA responded, but returned neither message content nor reasoning text.")
 
     return {
         "provider": "NVIDIA",
