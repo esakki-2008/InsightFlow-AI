@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, Database, FileSpreadsheet, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 
 type DatasetRecord = {
   id: string
