@@ -51,7 +51,7 @@ def generate_statistical_analysis(dataframe: pd.DataFrame) -> dict:
                 normality = {
                     "test": "Shapiro-Wilk",
                     "statistic": round(float(statistic), 5),
-                    "p_value": round(float(p_value), 6),
+                    "p_value": float(p_value),
                     "interpretation": (
                         "Evidence against a normal distribution at 5% significance"
                         if p_value < 0.05 else
@@ -88,9 +88,9 @@ def generate_statistical_analysis(dataframe: pd.DataFrame) -> dict:
             correlations.append({
                 "left": str(left), "right": str(right), "sample_size": int(len(pair)),
                 "pearson_r": round(float(pearson), 5),
-                "pearson_p_value": round(float(pearson_p), 7),
+                "pearson_p_value": float(pearson_p),
                 "spearman_rho": round(float(spearman), 5),
-                "spearman_p_value": round(float(spearman_p), 7),
+                "spearman_p_value": float(spearman_p),
                 "strength": "strong" if abs(pearson) >= 0.7 else "moderate" if abs(pearson) >= 0.4 else "weak",
                 "significant_at_5_percent": bool(pearson_p < 0.05),
             })
@@ -128,7 +128,7 @@ def generate_statistical_analysis(dataframe: pd.DataFrame) -> dict:
                 ],
                 "test": "One-way ANOVA",
                 "f_statistic": round(float(statistic), 5),
-                "p_value": round(float(p_value), 7),
+                "p_value": float(p_value),
                 "significant_at_5_percent": bool(p_value < 0.05),
             })
 
