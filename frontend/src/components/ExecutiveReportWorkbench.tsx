@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, FileSpreadsheet, FileText, Loader2, AlertCircle, Sparkles, Download, ShieldCheck, Printer } from 'lucide-react'
 
-const API_URL = 'http://127.0.0.1:8000'
+import { API_URL } from '../config/api'
 type Finding = { area: string; priority: string; title: string; detail: string; recommendation: string }
 type Report = {
   filename: string
