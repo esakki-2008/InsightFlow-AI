@@ -5,6 +5,16 @@ from app.services.insights_service import generate_dataset_insights
 from app.services.statistical_analysis_service import generate_statistical_analysis
 
 
+def _format_p_value(value: float) -> str:
+    """Format tiny p-values without displaying numeric underflow as zero."""
+    numeric = float(value)
+    if numeric <= 0:
+        return "< 1e-300 (below floating-point range)"
+    if numeric < 1e-300:
+        return "< 1e-300"
+    return f"{numeric:.3g}"
+
+
 def generate_executive_report(dataframe: pd.DataFrame, filename: str) -> dict:
     """Build a deterministic executive report from local dataset analysis."""
     if dataframe is None or dataframe.empty:
@@ -54,7 +64,7 @@ def generate_executive_report(dataframe: pd.DataFrame, filename: str) -> dict:
             "title": f"{item['left']} and {item['right']} are associated",
             "detail": (
                 f"Pearson r={item['pearson_r']}; Spearman rho={item['spearman_rho']}; "
-                f"n={item['sample_size']}; Pearson p={item['pearson_p_value']:.3g}."
+                f"n={item['sample_size']}; Pearson p={_format_p_value(item['pearson_p_value'])}."
             ),
             "recommendation": "Treat this as an association, not evidence that one feature causes the other.",
         })
