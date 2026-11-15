@@ -563,6 +563,7 @@ async def train_ml_models(
     target_column: str = Form("Label"),
     test_size: float = Form(0.2),
     random_state: int = Form(42),
+    db: Session = Depends(get_db),
 ):
     """Train baseline binary classifiers and evaluate on a stratified holdout set."""
     try:
@@ -591,8 +592,29 @@ async def train_ml_models(
             prepared=prepared,
             random_state=random_state,
         )
+        model_record = models.MLModelRecord(
+            id=training["model_id"],
+            dataset_filename=filename,
+            target_column=prepared["summary"]["target_column"],
+            feature_count=training["feature_count"],
+            test_rows=training["test_rows"],
+            class_labels=training["class_labels"],
+            model_names=training["saved_models"],
+            metrics=[
+                {
+                    "model": item["model"],
+                    "accuracy": item["accuracy"],
+                    "precision_macro": item["precision_macro"],
+                    "recall_macro": item["recall_macro"],
+                    "f1_macro": item["f1_macro"],
+                }
+                for item in training["results"]
+            ],
+        )
+        db.add(model_record)
+        db.commit()
         return {
-            "message": "Classification models trained and evaluated successfully",
+            "message": "Classification models trained and metadata registered successfully",
             "filename": filename,
             "preparation": prepared["summary"],
             "training": training,
@@ -610,10 +632,26 @@ async def train_ml_models(
 
 
 @app.get("/api/v1/ml/models")
-def get_saved_ml_models():
-    """Return metadata for models currently saved on this backend instance."""
+def get_saved_ml_models(db: Session = Depends(get_db)):
+    """Return saved model bundles enriched with persistent database metadata."""
     try:
-        return list_saved_models()
+        result = list_saved_models()
+        records = {
+            record.id: record
+            for record in db.query(models.MLModelRecord).all()
+        }
+        for item in result.get("models", []):
+            record = records.get(item["model_id"])
+            if record:
+                item.update({
+                    "dataset_filename": record.dataset_filename,
+                    "test_rows": record.test_rows,
+                    "metrics": record.metrics or [],
+                    "registered_at": record.created_at.isoformat(),
+                })
+        result["registered_models"] = len(records)
+        result["storage_note"] = "Model binaries remain in the backend artifact directory; database stores metadata only."
+        return result
     except RuntimeError as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
