@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.auth import router as auth_router, get_current_user
 from app.ai_credentials import router as ai_credentials_router
-from app.models import User
+from app.models import AIProviderCredential, User
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
 from app.models import AnalysisHistory
@@ -40,6 +40,7 @@ from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
 from app.services.question_suggestion_service import generate_question_suggestions
 from app.services.llm_provider_service import test_nvidia_connection
+from app.services.credential_crypto_service import decrypt_api_key
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
@@ -520,15 +521,30 @@ async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/ask/advanced", dependencies=[Depends(get_current_user)])
+@app.post("/api/v1/datasets/ask/advanced")
 async def ask_dataset_question_advanced_endpoint(
     file: UploadFile = File(...),
     question: str = Form(...),
-    api_key: str = Form(...),
-    model: str = Form("nvidia/nemotron-3.5-lightning-30b-a3b"),
+    credential_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Answer a dataset question using NVIDIA planning and validated local Pandas execution."""
+    """Answer a dataset question using this user's saved, encrypted AI provider credential."""
     try:
+        credential = (
+            db.query(AIProviderCredential)
+            .filter(
+                AIProviderCredential.id == credential_id,
+                AIProviderCredential.user_id == current_user.id,
+            )
+            .first()
+        )
+        if credential is None:
+            raise HTTPException(status_code=404, detail="Saved AI provider connection not found.")
+        if credential.protocol != "openai_compatible":
+            raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A yet.")
+        api_key = decrypt_api_key(credential.encrypted_api_key)
+
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
         inspect_dataset(filename=filename, content=content)
@@ -548,7 +564,9 @@ async def ask_dataset_question_advanced_endpoint(
             dataframe=dataframe,
             question=question,
             api_key=api_key,
-            model=model,
+            model=credential.model_id,
+            base_url=credential.base_url,
+            provider_name=credential.provider_name,
         )
         return {
             "message": "Advanced AI dataset question answered successfully",
