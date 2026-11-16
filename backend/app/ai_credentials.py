@@ -1,6 +1,8 @@
 """Per-user CRUD API for encrypted OpenAI-compatible provider credentials."""
 from datetime import datetime, timezone
 import ipaddress
+import json
+import re
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -11,13 +13,55 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import AIProviderCredential, User
-from app.services.credential_crypto_service import decrypt_api_key, encrypt_api_key
+from app.services.credential_crypto_service import decrypt_api_key, encrypt_api_key, decrypt_secret_text, encrypt_secret_text
 from app.services.openai_compatible_service import test_openai_compatible_connection
 from app.services.native_provider_service import (
     PROTOCOL_GEMINI, PROTOCOL_ANTHROPIC, test_native_provider_connection,
 )
 
 router = APIRouter(prefix="/api/v1/ai/credentials", tags=["AI provider credentials"])
+
+_RESERVED_CUSTOM_HEADERS = {
+    "authorization", "proxy-authorization", "host", "content-length",
+    "connection", "keep-alive", "proxy-authenticate", "te", "trailer",
+    "transfer-encoding", "upgrade", "content-type", "x-api-key",
+    "api-key", "x-goog-api-key", "anthropic-version",
+}
+_HEADER_NAME = re.compile(r"^[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}$")
+
+
+def _validate_custom_headers(value: dict[str, str] | None) -> dict[str, str]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict) or len(value) > 20:
+        raise ValueError("Provide no more than 20 custom HTTP headers.")
+    cleaned: dict[str, str] = {}
+    total_size = 0
+    for name, header_value in value.items():
+        if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
+            raise ValueError("A custom HTTP header name is invalid.")
+        if name.lower() in _RESERVED_CUSTOM_HEADERS:
+            raise ValueError(f"The custom header '{name}' is reserved for secure provider communication.")
+        if not isinstance(header_value, str) or len(header_value) > 2048:
+            raise ValueError("Custom HTTP header values must be text up to 2048 characters.")
+        if any(ord(char) < 32 or ord(char) == 127 for char in header_value):
+            raise ValueError("Custom HTTP header values cannot contain control characters.")
+        total_size += len(name) + len(header_value)
+        cleaned[name] = header_value
+    if total_size > 8192:
+        raise ValueError("Custom HTTP headers exceed the 8192-character limit.")
+    return cleaned
+
+
+def _decrypt_custom_headers(record: AIProviderCredential) -> dict[str, str]:
+    if not record.encrypted_custom_headers:
+        return {}
+    try:
+        value = json.loads(decrypt_secret_text(record.encrypted_custom_headers))
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(status_code=503, detail="Saved custom provider headers are invalid.") from exc
+    return _validate_custom_headers(value)
+
 
 
 def _validate_base_url(value: str) -> str:
@@ -51,6 +95,12 @@ class CredentialCreate(BaseModel):
     base_url: str = Field(min_length=8, max_length=500)
     model_id: str = Field(min_length=1, max_length=200)
     api_key: str = Field(min_length=1, max_length=4096)
+    custom_headers: dict[str, str] | None = None
+
+    @field_validator("custom_headers")
+    @classmethod
+    def validate_headers(cls, value: dict[str, str] | None) -> dict[str, str]:
+        return _validate_custom_headers(value)
 
     @field_validator("display_name", "provider_name", "model_id")
     @classmethod
@@ -81,6 +131,12 @@ class CredentialUpdate(BaseModel):
     base_url: str | None = Field(default=None, min_length=8, max_length=500)
     model_id: str | None = Field(default=None, min_length=1, max_length=200)
     api_key: str | None = Field(default=None, min_length=1, max_length=4096)
+    custom_headers: dict[str, str] | None = None
+
+    @field_validator("custom_headers")
+    @classmethod
+    def validate_headers(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        return None if value is None else _validate_custom_headers(value)
 
     @field_validator("display_name", "provider_name", "model_id")
     @classmethod
@@ -120,6 +176,7 @@ def _credential_response(record: AIProviderCredential) -> dict:
         "base_url": record.base_url,
         "model_id": record.model_id,
         "has_api_key": True,
+        "has_custom_headers": bool(record.encrypted_custom_headers),
         "key_hint": f"••••{record.key_last_four}",
         "created_at": record.created_at.isoformat(),
         "updated_at": record.updated_at.isoformat(),
@@ -156,6 +213,7 @@ def create_credential(
         base_url=payload.base_url,
         model_id=payload.model_id,
         encrypted_api_key=encrypted_key,
+        encrypted_custom_headers=(encrypt_secret_text(json.dumps(payload.custom_headers, ensure_ascii=False)) if payload.custom_headers else None),
         key_last_four=payload.api_key[-4:],
     )
     db.add(record)
@@ -188,6 +246,11 @@ def update_credential(
     record = _owned_credential(db, credential_id, current_user)
     changes = payload.model_dump(exclude_unset=True)
     new_key = changes.pop("api_key", None)
+    if "custom_headers" in changes:
+        custom_headers = changes.pop("custom_headers")
+        record.encrypted_custom_headers = (
+            encrypt_secret_text(json.dumps(custom_headers, ensure_ascii=False)) if custom_headers else None
+        )
     for field, value in changes.items():
         setattr(record, field, value)
     if new_key is not None:
@@ -220,6 +283,7 @@ def test_saved_credential(
     """Test a saved provider credential without returning its decrypted API key."""
     record = _owned_credential(db, credential_id, current_user)
     api_key = decrypt_api_key(record.encrypted_api_key)
+    custom_headers = _decrypt_custom_headers(record)
     try:
         if record.protocol == "openai_compatible":
             return test_openai_compatible_connection(
@@ -227,6 +291,7 @@ def test_saved_credential(
                 base_url=record.base_url,
                 model=record.model_id,
                 provider_name=record.provider_name,
+                custom_headers=custom_headers,
             )
         if record.protocol in {PROTOCOL_GEMINI, PROTOCOL_ANTHROPIC}:
             return test_native_provider_connection(
@@ -235,6 +300,7 @@ def test_saved_credential(
                 base_url=record.base_url,
                 model=record.model_id,
                 provider_name=record.provider_name,
+                custom_headers=custom_headers,
             )
         raise ValueError("The saved provider protocol is not supported.")
     except ValueError as exc:
