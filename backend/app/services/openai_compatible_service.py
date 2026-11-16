@@ -96,6 +96,8 @@ def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str], cu
             "api-key", "x-goog-api-key", "anthropic-version",
         }:
             raise ValueError("A custom provider header attempted to override a reserved header.")
+        if any(existing.lower() == name.lower() for existing in safe_headers):
+            raise ValueError("A custom provider header cannot duplicate a provider or transport header.")
         if len(value) > 2048 or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
             raise ValueError("A custom provider header value is invalid.")
         try:
