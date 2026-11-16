@@ -75,6 +75,7 @@ class CredentialCreate(BaseModel):
 
 
 class CredentialUpdate(BaseModel):
+    protocol: str | None = Field(default=None, pattern="^(openai_compatible|native_gemini|native_anthropic)$")
     display_name: str | None = Field(default=None, min_length=1, max_length=80)
     provider_name: str | None = Field(default=None, min_length=1, max_length=80)
     base_url: str | None = Field(default=None, min_length=8, max_length=500)
