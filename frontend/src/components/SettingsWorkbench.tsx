@@ -11,7 +11,7 @@ interface Credential {
   id: string
   display_name: string
   provider_name: string
-  protocol: 'openai_compatible'
+  protocol: 'openai_compatible' | 'native_gemini' | 'native_anthropic'
   base_url: string
   model_id: string
   has_api_key: boolean
@@ -21,6 +21,7 @@ interface Credential {
 }
 
 interface CredentialForm {
+  protocol: 'openai_compatible' | 'native_gemini' | 'native_anthropic'
   display_name: string
   provider_name: string
   base_url: string
@@ -29,6 +30,7 @@ interface CredentialForm {
 }
 
 const emptyForm: CredentialForm = {
+  protocol: 'openai_compatible',
   display_name: '',
   provider_name: '',
   base_url: '',
@@ -87,6 +89,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
   function openEditForm(credential: Credential) {
     setEditingId(credential.id)
     setForm({
+      protocol: credential.protocol,
       display_name: credential.display_name,
       provider_name: credential.provider_name,
       base_url: credential.base_url,
@@ -109,6 +112,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
     setNotice(null)
     try {
       const payload: Record<string, string> = {
+        protocol: form.protocol,
         display_name: form.display_name.trim(),
         provider_name: form.provider_name.trim(),
         base_url: form.base_url.trim(),
@@ -208,7 +212,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
               <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-violet-500/10 text-violet-300"><Bot size={20} /></div>
               <div>
                 <h2 className="font-semibold text-white">AI provider connections</h2>
-                <p className="mt-1 text-xs text-zinc-500">Connect any provider that exposes an OpenAI-compatible chat completions API.</p>
+                <p className="mt-1 text-xs text-zinc-500">Connect OpenAI-compatible providers, Google Gemini, or Anthropic Claude.</p>
               </div>
             </div>
             <button type="button" onClick={openNewForm} className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-violet-500"><Plus size={16} /> Add provider</button>
@@ -229,6 +233,21 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
                 <button type="button" onClick={closeForm} className="rounded-lg p-1.5 text-zinc-500 hover:bg-white/5 hover:text-white" aria-label="Close form"><X size={17} /></button>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
+                <label className={labelClass}>API protocol
+                  <select className={inputClass} value={form.protocol} onChange={(event) => {
+                    const protocol = event.target.value as CredentialForm['protocol']
+                    const defaultUrl = protocol === 'native_gemini'
+                      ? 'https://generativelanguage.googleapis.com'
+                      : protocol === 'native_anthropic'
+                        ? 'https://api.anthropic.com'
+                        : ''
+                    setForm({ ...form, protocol, base_url: defaultUrl })
+                  }}>
+                    <option value="openai_compatible">OpenAI-compatible API</option>
+                    <option value="native_gemini">Google Gemini API (native)</option>
+                    <option value="native_anthropic">Anthropic Claude API (native)</option>
+                  </select>
+                </label>
                 <label className={labelClass}>Connection name
                   <input required maxLength={80} className={inputClass} placeholder="My NVIDIA account" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} />
                 </label>
@@ -236,7 +255,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
                   <input required maxLength={80} className={inputClass} placeholder="NVIDIA, OpenRouter, Groq..." value={form.provider_name} onChange={(event) => setForm({ ...form, provider_name: event.target.value })} />
                 </label>
                 <label className={labelClass + ' sm:col-span-2'}>API base URL
-                  <input required type="url" maxLength={500} className={inputClass} placeholder="https://integrate.api.nvidia.com/v1" value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
+                  <input required type="url" maxLength={500} className={inputClass} placeholder={form.protocol === 'native_gemini' ? 'https://generativelanguage.googleapis.com' : form.protocol === 'native_anthropic' ? 'https://api.anthropic.com' : 'https://integrate.api.nvidia.com/v1'} value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
                 </label>
                 <label className={labelClass}>Model ID
                   <input required maxLength={200} className={inputClass} placeholder="meta/llama-3.1-8b-instruct" value={form.model_id} onChange={(event) => setForm({ ...form, model_id: event.target.value })} />
@@ -293,7 +312,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
           </section>
           <section className="rounded-2xl border border-white/[0.08] bg-[#11111b] p-5">
             <div className="flex items-center gap-3"><Workflow size={19} className="text-violet-300" /><h3 className="font-semibold text-zinc-100">Provider compatibility</h3></div>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">This first adapter supports OpenAI-compatible chat completions. Native Gemini and Anthropic APIs need dedicated adapters and are not supported by this connection form yet.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Supports OpenAI-compatible chat completions plus native Google Gemini and Anthropic Claude APIs. Native Gemini and Anthropic APIs need dedicated adapters and are not supported by this connection form yet.</p>
           </section>
         </div>
       </div>
