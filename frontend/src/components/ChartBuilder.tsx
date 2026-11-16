@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { BarChart3, Loader2, Sparkles } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 type ChartPoint = { label: string; value: number; x?: number }
 type ChartResult = { chart_type: string; x_column: string; y_column: string; aggregation: string; points: ChartPoint[]; total_records: number; filtered_records?: number; filter_column?: string; filter_value?: string; filter_min?: string; filter_max?: string; note?: string }
 
@@ -30,7 +30,7 @@ export default function ChartBuilder({ file, columns, filterColumn, filterValue,
       form.append('filter_value', filterValue)
       form.append('filter_min', filterMin)
       form.append('filter_max', filterMax)
-      const response = await fetch(`${API_URL}/api/v1/datasets/chart`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/chart`, { method: 'POST', body: form })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Could not generate chart.')
       const chartResult = payload.chart as ChartResult
@@ -42,7 +42,7 @@ export default function ChartBuilder({ file, columns, filterColumn, filterValue,
       // persisted by ChartWorkspace to avoid duplicate history records.
       if (!onChartGenerated) {
         try {
-          const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+          const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
