@@ -1,4 +1,5 @@
 
+from contextlib import asynccontextmanager
 from io import BytesIO
 import os
 from pathlib import Path
@@ -38,10 +39,24 @@ from app.services.llm_provider_service import test_nvidia_connection
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
+def initialize_database():
+    """Apply pending database schema migrations before serving requests."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    alembic_config = Config(str(backend_dir / "alembic.ini"))
+    command.upgrade(alembic_config, "head")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    initialize_database()
+    yield
+
+
 app = FastAPI(
     title="InsightFlow AI",
     description="An intelligent AI-powered data analysis platform.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 
@@ -57,14 +72,6 @@ async def add_security_headers(request, call_next):
         "camera=(), microphone=(), geolocation=()",
     )
     return response
-
-
-@app.on_event("startup")
-def initialize_database():
-    """Apply pending database schema migrations before serving requests."""
-    backend_dir = Path(__file__).resolve().parents[1]
-    alembic_config = Config(str(backend_dir / "alembic.ini"))
-    command.upgrade(alembic_config, "head")
 
 
 def get_allowed_origins() -> list[str]:
