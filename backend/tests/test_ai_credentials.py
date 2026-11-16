@@ -204,3 +204,64 @@ def test_openai_compatible_connection_rejects_non_public_dns(monkeypatch):
         assert "public IP" in str(exc)
     else:
         raise AssertionError("Private provider address should be rejected")
+
+
+def test_advanced_dataset_qa_uses_only_the_authenticated_users_saved_provider(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import main
+
+    calls = {}
+
+    def fake_answer(**kwargs):
+        calls.update(kwargs)
+        return {
+            "question": kwargs["question"],
+            "answer": "There are two rows.",
+            "query_type": "row_count",
+            "result": {"rows": 2},
+            "rows_analyzed": 2,
+            "provider": kwargs["provider_name"],
+            "model": kwargs["model"],
+        }
+
+    monkeypatch.setattr(main, "answer_advanced_dataset_question", fake_answer)
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload())
+    credential_id = created.json()["credential"]["id"]
+
+    response = auth_api_client(
+        "POST",
+        "/api/v1/datasets/ask/advanced",
+        data={"question": "How many rows?", "credential_id": credential_id},
+        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["qa"]["provider"] == "Custom Provider"
+    assert calls["api_key"] == "test-provider-secret-1234"
+    assert calls["base_url"] == "https://api.example.com/v1"
+    assert calls["model"] == "example/chat-model"
+    assert calls["provider_name"] == "Custom Provider"
+    assert "test-provider-secret-1234" not in response.text
+
+
+def test_advanced_dataset_qa_cannot_use_another_users_saved_provider(auth_api_client, api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import main
+
+    def should_not_run(**kwargs):
+        raise AssertionError("Provider call must not run for another user's credential")
+
+    monkeypatch.setattr(main, "answer_advanced_dataset_question", should_not_run)
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload())
+    credential_id = created.json()["credential"]["id"]
+    other_headers = _register(api_client, "dataset-qa-other@example.com")
+
+    response = api_client(
+        "POST",
+        "/api/v1/datasets/ask/advanced",
+        headers=other_headers,
+        data={"question": "How many rows?", "credential_id": credential_id},
+        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+    )
+
+    assert response.status_code == 404
