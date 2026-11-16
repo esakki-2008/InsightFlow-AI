@@ -57,31 +57,36 @@ def _resolve_public_address(hostname: str) -> str:
     return addresses[0]
 
 
-def _post_json(url: str, api_key: str, payload: dict) -> dict:
+def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str]) -> dict:
+    """POST JSON through the pinned public-IP HTTPS transport using explicit safe headers."""
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname:
         raise ValueError("Provider endpoints must use HTTPS.")
     hostname = parsed.hostname
     address = _resolve_public_address(hostname)
     port = parsed.port or 443
-    path = parsed.path or "/"
+    request_path = parsed.path or "/"
     if parsed.query:
-        path += "?" + parsed.query
+        request_path += "?" + parsed.query
+
+    safe_headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Host": parsed.netloc,
+    }
+    for name, value in headers.items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ValueError("Provider request headers must be text.")
+        if name.lower() in {"host", "content-length", "connection", "transfer-encoding", "content-type"}:
+            raise ValueError("A provider adapter attempted to override a reserved HTTP header.")
+        if any(ch in name + value for ch in "\r\n"):
+            raise ValueError("Provider request headers contain invalid characters.")
+        safe_headers[name] = value
 
     connection = _PinnedHTTPSConnection(hostname, port, address)
     body = json.dumps(payload).encode("utf-8")
     try:
-        connection.request(
-            "POST",
-            path,
-            body=body,
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-                "Accept": "application/json",
-                "Host": parsed.netloc,
-            },
-        )
+        connection.request("POST", request_path, body=body, headers=safe_headers)
         response = connection.getresponse()
         raw = response.read(MAX_RESPONSE_BYTES + 1)
         if len(raw) > MAX_RESPONSE_BYTES:
@@ -107,6 +112,10 @@ def _post_json(url: str, api_key: str, payload: dict) -> dict:
         raise ValueError("Could not connect to the provider endpoint.") from exc
     finally:
         connection.close()
+
+
+def _post_json(url: str, api_key: str, payload: dict) -> dict:
+    return _post_json_with_headers(url, payload, {"Authorization": f"Bearer {api_key}"})
 
 
 def test_openai_compatible_connection(
