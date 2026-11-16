@@ -63,7 +63,7 @@ export default function ModelRegistryWorkbench({ onBack }: Props) {
     }
   }, [])
 
-  useEffect(() => { void loadModels() }, [loadModels])
+  useEffect(() => { void Promise.resolve().then(loadModels) }, [loadModels])
 
   const models = useMemo(() => {
     const items = data?.models ?? []
