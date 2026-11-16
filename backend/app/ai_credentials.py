@@ -50,6 +50,10 @@ def _validate_custom_headers(value: dict[str, str] | None) -> dict[str, str]:
             raise ValueError("Custom HTTP header values must be text up to 2048 characters.")
         if any(ord(char) < 32 or ord(char) == 127 for char in header_value):
             raise ValueError("Custom HTTP header values cannot contain control characters.")
+        try:
+            header_value.encode("latin-1")
+        except UnicodeEncodeError as exc:
+            raise ValueError("Custom HTTP header values must use Latin-1-compatible characters.") from exc
         total_size += len(name) + len(header_value)
         cleaned[name] = header_value
     if total_size > 8192:
