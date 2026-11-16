@@ -541,8 +541,8 @@ async def ask_dataset_question_advanced_endpoint(
         )
         if credential is None:
             raise HTTPException(status_code=404, detail="Saved AI provider connection not found.")
-        if credential.protocol != "openai_compatible":
-            raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A yet.")
+        if credential.protocol not in {"openai_compatible", "native_gemini", "native_anthropic"}:
+            raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A.")
         api_key = decrypt_api_key(credential.encrypted_api_key)
 
         filename = file.filename or "unknown"
