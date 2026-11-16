@@ -40,7 +40,7 @@ from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
 from app.services.question_suggestion_service import generate_question_suggestions
 from app.services.llm_provider_service import test_nvidia_connection
-from app.services.credential_crypto_service import decrypt_api_key
+from app.services.credential_crypto_service import decrypt_api_key, decrypt_secret_text
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
@@ -544,6 +544,12 @@ async def ask_dataset_question_advanced_endpoint(
         if credential.protocol not in {"openai_compatible", "native_gemini", "native_anthropic"}:
             raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A.")
         api_key = decrypt_api_key(credential.encrypted_api_key)
+        custom_headers = {}
+        if credential.encrypted_custom_headers:
+            try:
+                custom_headers = json.loads(decrypt_secret_text(credential.encrypted_custom_headers))
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise HTTPException(status_code=503, detail="Saved provider headers are invalid.") from exc
 
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
@@ -568,6 +574,7 @@ async def ask_dataset_question_advanced_endpoint(
             base_url=credential.base_url,
             provider_name=credential.provider_name,
             protocol=credential.protocol,
+            custom_headers=custom_headers,
         )
         return {
             "message": "Advanced AI dataset question answered successfully",
