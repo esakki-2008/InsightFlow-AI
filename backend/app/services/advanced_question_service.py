@@ -334,5 +334,5 @@ def answer_advanced_dataset_question(
         "provider": "NVIDIA",
         "model": selected_model,
         "execution": "validated_pandas_operation",
-        "privacy_note": "Only dataset column names and inferred types were sent to NVIDIA for query planning; dataset row values were processed locally.",
+        "privacy_note": "Dataset rows are processed locally. NVIDIA receives the dataset column names and inferred types plus your question for query planning, then receives the question and computed analysis result (such as aggregates, counts, or correlations) to generate the explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing these details with NVIDIA.",
     }
