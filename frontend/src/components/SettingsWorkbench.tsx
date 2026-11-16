@@ -312,7 +312,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
           </section>
           <section className="rounded-2xl border border-white/[0.08] bg-[#11111b] p-5">
             <div className="flex items-center gap-3"><Workflow size={19} className="text-violet-300" /><h3 className="font-semibold text-zinc-100">Provider compatibility</h3></div>
-            <p className="mt-2 text-sm leading-6 text-zinc-500">Supports OpenAI-compatible chat completions plus native Google Gemini and Anthropic Claude APIs. Native Gemini and Anthropic APIs need dedicated adapters and are not supported by this connection form yet.</p>
+            <p className="mt-2 text-sm leading-6 text-zinc-500">Supports OpenAI-compatible chat completions plus native Google Gemini and Anthropic Claude APIs.</p>
           </section>
         </div>
       </div>
