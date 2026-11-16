@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import router as auth_router
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
 from app.models import AnalysisHistory
@@ -58,6 +59,8 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.include_router(auth_router)
 
 
 @app.middleware("http")
