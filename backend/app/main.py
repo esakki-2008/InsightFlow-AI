@@ -1,6 +1,10 @@
 
 from io import BytesIO
 import os
+from pathlib import Path
+
+from alembic import command
+from alembic.config import Config
 
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -8,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.database import Base, engine, get_db
+from app.database import get_db
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
 from app.models import AnalysisHistory
@@ -42,8 +46,10 @@ app = FastAPI(
 
 @app.on_event("startup")
 def initialize_database():
-    """Create application tables when the API starts."""
-    Base.metadata.create_all(bind=engine)
+    """Apply pending database schema migrations before serving requests."""
+    backend_dir = Path(__file__).resolve().parents[1]
+    alembic_config = Config(str(backend_dir / "alembic.ini"))
+    command.upgrade(alembic_config, "head")
 
 
 def get_allowed_origins() -> list[str]:
