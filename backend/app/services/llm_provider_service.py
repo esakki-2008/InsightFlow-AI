@@ -6,6 +6,7 @@ import http.client
 import json
 import socket
 import ssl
+from urllib.parse import urlsplit
 
 
 NVIDIA_CHAT_COMPLETIONS_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
@@ -40,16 +41,17 @@ def test_nvidia_connection(api_key: str, model: str = DEFAULT_NVIDIA_MODEL) -> d
         "chat_template_kwargs": {"enable_thinking": False},
     }
 
+    endpoint = urlsplit(NVIDIA_CHAT_COMPLETIONS_URL)
     connection = http.client.HTTPSConnection(
-        "integrate.api.nvidia.com",
-        port=443,
+        endpoint.hostname,
+        port=endpoint.port or 443,
         timeout=CONNECTION_TIMEOUT_SECONDS,
         context=ssl.create_default_context(),
     )
     try:
         connection.request(
             "POST",
-            "/v1/chat/completions",
+            endpoint.path,
             body=json.dumps(payload).encode("utf-8"),
             headers={
                 "Authorization": f"Bearer {key}",
