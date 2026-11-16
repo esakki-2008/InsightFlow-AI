@@ -1,5 +1,7 @@
 
 import { useEffect, useState } from 'react'
+import AuthScreen from './components/AuthScreen'
+import { AUTH_TOKEN_KEY, AUTH_USER_KEY, API_URL, apiFetch, type AuthResponse, type AuthUser } from './config/api'
 import DataExplorer from './components/DataExplorer'
 import AnalyticsWorkbench from './components/AnalyticsWorkbench'
 import DataQualityWorkbench from './components/DataQualityWorkbench'
@@ -35,7 +37,6 @@ import {
   X,
 } from 'lucide-react'
 
-import { API_URL } from './config/api'
 
 interface DatasetInfo {
   filename: string
@@ -106,7 +107,10 @@ interface CleaningPreviewResponse {
   cleaning_preview: CleaningPreview
 }
 
-function App() {
+interface DashboardAppProps { user: AuthUser; onLogout: () => void }
+
+function DashboardApp({ user, onLogout }: DashboardAppProps) {
+  const storageKey = (key: string) => `insightflow:${user.id}:${key}`
   const [activePage, setActivePage] = useState('Overview')
   const [savedModelCount, setSavedModelCount] = useState<number | null>(null)
   const [modelsLoadError, setModelsLoadError] = useState('')
@@ -115,7 +119,7 @@ function App() {
   const [uploadError, setUploadError] = useState('')
   const [dataset, setDataset] = useState<DatasetInfo | null>(() => {
     try {
-      const saved = localStorage.getItem('insightflow_dashboard_dataset')
+      const saved = localStorage.getItem(storageKey('dashboard_dataset'))
       return saved ? (JSON.parse(saved) as DatasetInfo) : null
     } catch {
       return null
@@ -123,7 +127,7 @@ function App() {
   })
   const [analysisCount, setAnalysisCount] = useState(() => {
     try {
-      return Number(localStorage.getItem('insightflow_dashboard_analysis_count') || 0)
+      return Number(localStorage.getItem(storageKey('dashboard_analysis_count')) || 0)
     } catch {
       return 0
     }
@@ -131,7 +135,7 @@ function App() {
 
   const [recentDatasets, setRecentDatasets] = useState<DatasetInfo[]>(() => {
     try {
-      const saved = localStorage.getItem('insightflow_recent_datasets')
+      const saved = localStorage.getItem(storageKey('recent_datasets'))
       if (saved) return JSON.parse(saved) as DatasetInfo[]
       const latest = localStorage.getItem('insightflow_dashboard_dataset')
       return latest ? [JSON.parse(latest) as DatasetInfo] : []
@@ -144,7 +148,7 @@ function App() {
     let cancelled = false
     const loadSavedModels = async () => {
       try {
-        const response = await fetch(`${API_URL}/api/v1/ml/models`)
+        const response = await apiFetch(`${API_URL}/api/v1/ml/models`)
         if (!response.ok) throw new Error('Unable to load saved models')
         const result = await response.json()
         if (!cancelled) {
@@ -165,9 +169,9 @@ function App() {
   useEffect(() => {
     try {
       if (dataset) {
-        localStorage.setItem('insightflow_dashboard_dataset', JSON.stringify(dataset))
+        localStorage.setItem(storageKey('dashboard_dataset'), JSON.stringify(dataset))
       } else {
-        localStorage.removeItem('insightflow_dashboard_dataset')
+        localStorage.removeItem(storageKey('dashboard_dataset'))
       }
     } catch {
       // Dashboard remains usable if browser storage is unavailable.
@@ -176,7 +180,7 @@ function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('insightflow_dashboard_analysis_count', String(analysisCount))
+      localStorage.setItem(storageKey('dashboard_analysis_count'), String(analysisCount))
     } catch {
       // Dashboard remains usable if browser storage is unavailable.
     }
@@ -184,7 +188,7 @@ function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('insightflow_recent_datasets', JSON.stringify(recentDatasets))
+      localStorage.setItem(storageKey('recent_datasets'), JSON.stringify(recentDatasets))
     } catch {
       // Recent dataset history is optional when browser storage is unavailable.
     }
@@ -242,7 +246,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/api/v1/datasets/upload`,
         {
           method: 'POST',
@@ -593,13 +597,10 @@ function App() {
               <span className="h-2 w-2 rounded-full bg-emerald-400" />
               Platform initialized
             </div>
-            <button className="flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm">
-              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-violet-600 text-xs font-bold">
-                I
-              </div>
-              <span className="hidden sm:inline">Workspace</span>
-              <ChevronDown size={15} className="text-zinc-500" />
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="hidden max-w-48 truncate text-xs text-zinc-400 sm:inline">{user.email}</span>
+              <button type="button" onClick={onLogout} className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-2 text-xs font-medium text-zinc-300 transition hover:border-red-500/30 hover:text-red-300">Sign out</button>
+            </div>
           </div>
         </header>
 
@@ -1265,6 +1266,64 @@ function App() {
       </main>
     </div>
   )
+}
+
+
+function App() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [checkingSession, setCheckingSession] = useState(true)
+
+  useEffect(() => {
+    let cancelled = false
+    const restoreSession = async () => {
+      const token = sessionStorage.getItem(AUTH_TOKEN_KEY)
+      if (!token) {
+        if (!cancelled) setCheckingSession(false)
+        return
+      }
+      try {
+        const response = await apiFetch(`${API_URL}/api/v1/auth/me`)
+        if (!response.ok) throw new Error('Session expired')
+        const account = await response.json() as AuthUser
+        if (!cancelled) {
+          sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(account))
+          setUser(account)
+        }
+      } catch {
+        sessionStorage.removeItem(AUTH_TOKEN_KEY)
+        sessionStorage.removeItem(AUTH_USER_KEY)
+        if (!cancelled) setUser(null)
+      } finally {
+        if (!cancelled) setCheckingSession(false)
+      }
+    }
+    restoreSession()
+    return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => {
+    const handleUnauthorized = () => setUser(null)
+    window.addEventListener('insightflow:unauthorized', handleUnauthorized)
+    return () => window.removeEventListener('insightflow:unauthorized', handleUnauthorized)
+  }, [])
+
+  const handleAuthenticated = (result: AuthResponse) => {
+    sessionStorage.setItem(AUTH_TOKEN_KEY, result.access_token)
+    sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(result.user))
+    setUser(result.user)
+  }
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_USER_KEY)
+    setUser(null)
+  }
+
+  if (checkingSession) {
+    return <div className="flex min-h-screen items-center justify-center bg-[#09090f] text-sm text-zinc-400">Restoring your secure session...</div>
+  }
+  if (!user) return <AuthScreen onAuthenticated={handleAuthenticated} />
+  return <DashboardApp key={user.id} user={user} onLogout={handleLogout} />
 }
 
 export default App
