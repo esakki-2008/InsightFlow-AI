@@ -1,5 +1,6 @@
 """Per-user CRUD API for encrypted OpenAI-compatible provider credentials."""
 from datetime import datetime, timezone
+import ipaddress
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -10,7 +11,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_user
 from app.database import get_db
 from app.models import AIProviderCredential, User
-from app.services.credential_crypto_service import encrypt_api_key
+from app.services.credential_crypto_service import decrypt_api_key, encrypt_api_key
+from app.services.openai_compatible_service import test_openai_compatible_connection
 
 router = APIRouter(prefix="/api/v1/ai/credentials", tags=["AI provider credentials"])
 
@@ -19,14 +21,23 @@ def _validate_base_url(value: str) -> str:
     value = value.strip().rstrip("/")
     parsed = urlsplit(value)
     if (
-        parsed.scheme not in {"https", "http"}
+        parsed.scheme != "https"
         or not parsed.hostname
         or parsed.username
         or parsed.password
         or parsed.query
         or parsed.fragment
     ):
-        raise ValueError("Enter a valid provider base URL without credentials, query parameters, or fragments.")
+        raise ValueError("Enter a valid HTTPS provider base URL without credentials, query parameters, or fragments.")
+    hostname = parsed.hostname.lower()
+    if hostname == "localhost" or hostname.endswith((".localhost", ".local", ".internal")):
+        raise ValueError("Local and internal provider endpoints are not allowed.")
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        pass
+    else:
+        raise ValueError("Use a public provider hostname, not an IP address.")
     return value
 
 
@@ -194,3 +205,23 @@ def delete_credential(
     db.delete(record)
     db.commit()
     return {"message": "Provider credential deleted.", "id": credential_id}
+
+
+@router.post("/{credential_id}/test")
+def test_saved_credential(
+    credential_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Test a saved provider credential without returning its decrypted API key."""
+    record = _owned_credential(db, credential_id, current_user)
+    api_key = decrypt_api_key(record.encrypted_api_key)
+    try:
+        return test_openai_compatible_connection(
+            api_key=api_key,
+            base_url=record.base_url,
+            model=record.model_id,
+            provider_name=record.provider_name,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
