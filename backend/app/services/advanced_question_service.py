@@ -29,8 +29,20 @@ def _provider_chat(
     messages: list[dict],
     base_url: str,
     max_tokens: int = 700,
+    protocol: str = "openai_compatible",
 ) -> str:
-    """Call the selected OpenAI-compatible provider through the pinned HTTPS transport."""
+    """Call the selected provider through its protocol adapter and pinned HTTPS transport."""
+    if protocol in {"native_gemini", "native_anthropic"}:
+        return native_provider_chat(
+            protocol=protocol,
+            api_key=api_key,
+            model=model,
+            messages=messages,
+            base_url=base_url,
+            max_tokens=max_tokens,
+        )
+    if protocol != "openai_compatible":
+        raise ValueError("The selected AI provider protocol is not supported.")
     endpoint = (base_url or "").strip().rstrip("/")
     if not endpoint:
         raise ValueError("The selected provider has no API base URL.")
@@ -250,6 +262,7 @@ def answer_advanced_dataset_question(
     model: str = DEFAULT_NVIDIA_MODEL,
     base_url: str = "https://integrate.api.nvidia.com/v1",
     provider_name: str = "NVIDIA",
+    protocol: str = "openai_compatible",
 ) -> dict:
     """Use a selected OpenAI-compatible LLM to plan and explain validated local Pandas analysis."""
     key = (api_key or "").strip()
@@ -303,6 +316,7 @@ def answer_advanced_dataset_question(
             [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
             base_url=base_url,
             max_tokens=500,
+            protocol=protocol,
         )
         plan = _extract_json(plan_text)
     result = _validate_and_execute(frame, plan)
