@@ -44,7 +44,7 @@ def generate_exploration(dataframe: pd.DataFrame, page: int = 1,
     total_rows = len(frame)
     numeric_columns = frame.select_dtypes(include="number").columns.tolist()
     categorical_columns = frame.select_dtypes(
-        include=["object", "category", "bool"]
+        include=["object", "str", "category", "bool"]
     ).columns.tolist()
 
     numeric_stats = {}
