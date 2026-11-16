@@ -52,7 +52,7 @@ export default function HistoryWorkbench({ onBack }: { onBack: () => void }) {
     }
   }, [])
 
-  useEffect(() => { void loadHistory(0) }, [loadHistory])
+  useEffect(() => { void Promise.resolve().then(() => loadHistory(0)) }, [loadHistory])
 
   const filteredItems = useMemo(() => {
     const term = query.trim().toLowerCase()
