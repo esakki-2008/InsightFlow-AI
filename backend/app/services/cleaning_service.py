@@ -103,7 +103,7 @@ def generate_cleaning_preview(dataframe: pd.DataFrame) -> dict:
     categorical_columns = [
         str(column)
         for column in cleaned.select_dtypes(
-            include=["object", "category", "bool"]
+            include=["object", "str", "category", "bool"]
         ).columns
     ]
 
