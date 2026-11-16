@@ -1,13 +1,24 @@
-from fastapi.testclient import TestClient
+import asyncio
+
+import httpx
 
 from app.main import app
 
 
-client = TestClient(app)
+def request(method: str, path: str, **kwargs):
+    async def send():
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(
+            transport=transport,
+            base_url="http://testserver",
+        ) as client:
+            return await client.request(method, path, **kwargs)
+
+    return asyncio.run(send())
 
 
 def test_health_endpoint_returns_healthy_status_and_security_headers():
-    response = client.get("/api/v1/health")
+    response = request("GET", "/api/v1/health")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -24,7 +35,7 @@ def test_health_endpoint_returns_healthy_status_and_security_headers():
 
 
 def test_root_endpoint_returns_running_status():
-    response = client.get("/")
+    response = request("GET", "/")
 
     assert response.status_code == 200
     assert response.json()["status"] == "running"
@@ -32,9 +43,10 @@ def test_root_endpoint_returns_running_status():
 
 
 def test_upload_endpoint_rejects_unsupported_file_type():
-    response = client.post(
+    response = request(
+        "POST",
         "/api/v1/datasets/upload",
-        files={"file": ("notes.txt", b"name\nAda\n", "text/plain")},
+        files={"file": ("notes.txt", b"name\\nAda\\n", "text/plain")},
     )
 
     assert response.status_code == 400
