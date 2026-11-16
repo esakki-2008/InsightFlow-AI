@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import router as auth_router, get_current_user
+from app.ai_credentials import router as ai_credentials_router
 from app.models import User
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
@@ -63,6 +64,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(ai_credentials_router)
 
 
 @app.middleware("http")
@@ -370,73 +372,32 @@ async def export_analytics_excel(file: UploadFile = File(...)):
                 category_sheet.append([column, item.get("value"), count, count / total if total else 0])
 
         correlation_sheet = workbook.create_sheet("Correlations")
-        correlation_sheet.append(["Feature", *report.get("correlation", {}).keys()])
-        for feature, values in report.get("correlation", {}).items():
-            correlation_sheet.append([feature, *[values.get(name) for name in report.get("correlation", {}).keys()]])
+        correlation_sheet.append(["Feature A", "Feature B", "Correlation"])
+        for item in report.get("correlations", []):
+            correlation_sheet.append([item.get("feature_a"), item.get("feature_b"), item.get("correlation")])
 
-        header_fill = PatternFill("solid", fgColor="312E81")
         for sheet in workbook.worksheets:
             sheet.freeze_panes = "A2"
-            sheet.auto_filter.ref = sheet.dimensions if sheet.max_row > 1 else "A1"
             for cell in sheet[1]:
                 cell.font = Font(bold=True, color="FFFFFF")
-                cell.fill = header_fill
+                cell.fill = PatternFill("solid", fgColor="1F2937")
             for column_cells in sheet.columns:
-                max_length = max((len(str(cell.value)) if cell.value is not None else 0) for cell in column_cells)
-                sheet.column_dimensions[get_column_letter(column_cells[0].column)].width = min(max(max_length + 2, 12), 42)
-        for row in category_sheet.iter_rows(min_row=2, min_col=4, max_col=4):
-            row[0].number_format = "0.0%"
+                column_letter = get_column_letter(column_cells[0].column)
+                max_length = max(len(str(cell.value or "")) for cell in column_cells)
+                sheet.column_dimensions[column_letter].width = min(max(max_length + 2, 12), 48)
 
         output = BytesIO()
         workbook.save(output)
         output.seek(0)
-        safe_name = filename.rsplit(".", 1)[0].replace('"', "")
         return StreamingResponse(
             output,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}_analytics.xlsx"'},
+            headers={"Content-Disposition": 'attachment; filename="insightflow_analytics.xlsx"'},
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=400, detail="Unable to export the analytics workbook.") from exc
-    finally:
-        await file.close()
-
-
-@app.post("/api/v1/datasets/insights", dependencies=[Depends(get_current_user)])
-async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
-    """Generate evidence-backed plain-English insights for an uploaded dataset."""
-    try:
-        filename = file.filename or "unknown"
-        content = await file.read(10 * 1024 * 1024 + 1)
-        inspect_dataset(filename=filename, content=content)
-
-        extension = filename.lower().rsplit(".", 1)[-1]
-        if extension == "csv":
-            try:
-                dataframe = pd.read_csv(BytesIO(content), encoding="utf-8-sig")
-            except UnicodeDecodeError:
-                dataframe = pd.read_csv(BytesIO(content), encoding="cp1252")
-        elif extension in ("xlsx", "xls"):
-            dataframe = pd.read_excel(BytesIO(content))
-        else:
-            raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
-
-        insights = generate_dataset_insights(dataframe)
-        return {
-            "message": "Dataset insights generated successfully",
-            "filename": filename,
-            "insights": insights,
-        }
-
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except Exception as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="Unable to generate insights for this dataset. Check the file and try again.",
-        ) from exc
+        raise HTTPException(status_code=400, detail="Unable to export analytics. Check the dataset and try again.") from exc
     finally:
         await file.close()
 
@@ -446,7 +407,7 @@ async def ask_dataset_question_endpoint(
     file: UploadFile = File(...),
     question: str = Form(...),
 ):
-    """Answer a natural-language question using deterministic dataset operations."""
+    """Answer a dataset question using validated local Pandas operations."""
     try:
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
@@ -475,15 +436,15 @@ async def ask_dataset_question_endpoint(
     except Exception as exc:
         raise HTTPException(
             status_code=400,
-            detail="Unable to answer this question. Check the dataset and try again.",
+            detail="Unable to answer this dataset question. Check the file and try again.",
         ) from exc
     finally:
         await file.close()
 
 
-@app.post("/api/v1/datasets/suggest-questions", dependencies=[Depends(get_current_user)])
+@app.post("/api/v1/datasets/questions/suggest", dependencies=[Depends(get_current_user)])
 async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
-    """Profile a dataset locally and return relevant, supported question suggestions."""
+    """Suggest useful dataset questions based on columns and statistical profile."""
     try:
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
@@ -610,6 +571,8 @@ async def prepare_ml_dataset(
         return {
             "message": "ML dataset preparation completed successfully",
             "filename": filename,
+            "rows": int(dataframe.shape[0]),
+            "columns": int(dataframe.shape[1]),
             "preparation": prepared["summary"],
         }
 
@@ -618,12 +581,10 @@ async def prepare_ml_dataset(
     except Exception as exc:
         raise HTTPException(
             status_code=400,
-            detail="Unable to prepare this dataset for machine learning.",
+            detail="Unable to prepare the dataset for ML training.",
         ) from exc
     finally:
         await file.close()
-
-
 
 
 @app.post("/api/v1/ml/train", dependencies=[Depends(get_current_user)])
