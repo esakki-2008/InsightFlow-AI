@@ -533,3 +533,19 @@ def test_advanced_dataset_qa_passes_saved_custom_headers_to_provider(auth_api_cl
     assert response.status_code == 200
     assert calls["custom_headers"] == headers
     assert "workspace-42" not in response.text
+
+
+def test_provider_transport_rejects_custom_auth_header_override(monkeypatch):
+    from app.services import openai_compatible_service as provider
+    monkeypatch.setattr(provider, "_resolve_public_address", lambda hostname: "93.184.216.34")
+    try:
+        provider._post_json_with_headers(
+            "https://provider.example/v1/test",
+            {},
+            {"Authorization": "Bearer correct-key"},
+            custom_headers={"Authorization": "Bearer attacker-key"},
+        )
+    except ValueError as exc:
+        assert "reserved header" in str(exc)
+    else:
+        raise AssertionError("Custom headers must not override provider authentication")
