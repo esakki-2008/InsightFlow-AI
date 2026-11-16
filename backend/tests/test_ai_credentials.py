@@ -25,7 +25,7 @@ def _register(api_client, email):
     return {"Authorization": f"Bearer {response.json()['access_token']}"}
 
 
-def test_credentials_are_encrypted_and_never_returned(auth_api_client, monkeypatch):
+def test_credentials_are_encrypted_and_never_returned(auth_api_client, api_client, monkeypatch):
     monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
     saved = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload())
     assert saved.status_code == 201
@@ -34,7 +34,7 @@ def test_credentials_are_encrypted_and_never_returned(auth_api_client, monkeypat
     assert "api_key" not in response_body["credential"]
     assert "encrypted_api_key" not in response_body["credential"]
 
-    record = auth_api_client.session_factory()
+    record = api_client.session_factory()
     try:
         from app.models import AIProviderCredential
         stored = record.query(AIProviderCredential).one()
@@ -91,3 +91,15 @@ def test_credential_update_rotates_key_without_exposing_it(auth_api_client, monk
     assert updated.status_code == 200
     assert updated.json()["credential"]["key_hint"] == "••••5678"
     assert updated.json()["credential"]["model_id"] == "another/model"
+
+
+
+def test_credential_owner_can_delete_saved_credential(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload())
+    credential_id = created.json()["credential"]["id"]
+
+    deleted = auth_api_client("DELETE", f"/api/v1/ai/credentials/{credential_id}")
+    assert deleted.status_code == 200
+    assert deleted.json()["id"] == credential_id
+    assert auth_api_client("GET", "/api/v1/ai/credentials").json()["items"] == []
