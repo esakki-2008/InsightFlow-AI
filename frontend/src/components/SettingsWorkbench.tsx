@@ -15,6 +15,7 @@ interface Credential {
   base_url: string
   model_id: string
   has_api_key: boolean
+  has_custom_headers: boolean
   key_hint: string
   created_at: string
   updated_at: string
@@ -53,6 +54,8 @@ async function readResponse<T>(response: Response): Promise<T> {
 export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchProps) {
   const [credentials, setCredentials] = useState<Credential[]>([])
   const [form, setForm] = useState<CredentialForm>(emptyForm)
+  const [customHeadersText, setCustomHeadersText] = useState('')
+  const [clearCustomHeaders, setClearCustomHeaders] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [showForm, setShowForm] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -82,6 +85,8 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
   function openNewForm() {
     setEditingId(null)
     setForm(emptyForm)
+    setCustomHeadersText('')
+    setClearCustomHeaders(false)
     setNotice(null)
     setShowForm(true)
   }
@@ -96,6 +101,8 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
       model_id: credential.model_id,
       api_key: '',
     })
+    setCustomHeadersText('')
+    setClearCustomHeaders(false)
     setNotice(null)
     setShowForm(true)
   }
@@ -104,6 +111,8 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
     setShowForm(false)
     setEditingId(null)
     setForm(emptyForm)
+    setCustomHeadersText('')
+    setClearCustomHeaders(false)
   }
 
   async function saveCredential(event: FormEvent<HTMLFormElement>) {
@@ -111,7 +120,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
     setSaving(true)
     setNotice(null)
     try {
-      const payload: Record<string, string> = {
+      const payload: Record<string, unknown> = {
         protocol: form.protocol,
         display_name: form.display_name.trim(),
         provider_name: form.provider_name.trim(),
@@ -119,6 +128,23 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
         model_id: form.model_id.trim(),
       }
       if (form.api_key.trim()) payload.api_key = form.api_key.trim()
+      if (customHeadersText.trim()) {
+        let parsedHeaders: unknown
+        try {
+          parsedHeaders = JSON.parse(customHeadersText)
+        } catch {
+          throw new Error('Custom headers must be valid JSON.')
+        }
+        if (!parsedHeaders || typeof parsedHeaders !== 'object' || Array.isArray(parsedHeaders)) {
+          throw new Error('Custom headers must be a JSON object of header names and string values.')
+        }
+        if (Object.values(parsedHeaders as Record<string, unknown>).some((value) => typeof value !== 'string')) {
+          throw new Error('Every custom header value must be a string.')
+        }
+        payload.custom_headers = parsedHeaders
+      } else if (editingId && clearCustomHeaders) {
+        payload.custom_headers = {}
+      }
       if (!editingId && !payload.api_key) throw new Error('Enter an API key to add this provider.')
       const response = await apiFetch(
         editingId ? `${API_URL}/api/v1/ai/credentials/${editingId}` : `${API_URL}/api/v1/ai/credentials`,
@@ -130,6 +156,8 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
       )
       await readResponse(response)
       setForm(emptyForm)
+      setCustomHeadersText('')
+      setClearCustomHeaders(false)
       setShowForm(false)
       setEditingId(null)
       setNotice({ kind: 'success', message: editingId ? 'Provider settings updated securely.' : 'Provider saved. Your API key is encrypted on the server.' })
@@ -263,6 +291,16 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
                 <label className={labelClass}>API key {editingId && <span className="text-zinc-600">(leave blank to keep current)</span>}
                   <input required={!editingId} type="password" autoComplete="new-password" maxLength={4096} className={inputClass} placeholder={editingId ? 'Enter a new key only to rotate it' : 'Paste your provider API key'} value={form.api_key} onChange={(event) => setForm({ ...form, api_key: event.target.value })} />
                 </label>
+                <label className={labelClass + ' sm:col-span-2'}>Custom HTTP headers (optional)
+                  <textarea rows={4} maxLength={8192} spellCheck={false} className={inputClass + ' font-mono'} placeholder={'{\n  "X-Workspace-ID": "your-workspace",\n  "X-Environment": "production"\n}'} value={customHeadersText} onChange={(event) => setCustomHeadersText(event.target.value)} />
+                  <span className="mt-1 block text-[11px] leading-5 text-zinc-600">Enter a JSON object with header names and string values. Values are encrypted on the server and never returned to the browser.</span>
+                </label>
+                {editingId && credentials.find((item) => item.id === editingId)?.has_custom_headers && (
+                  <label className="sm:col-span-2 flex items-center gap-2 text-xs text-zinc-400">
+                    <input type="checkbox" checked={clearCustomHeaders} onChange={(event) => setClearCustomHeaders(event.target.checked)} />
+                    Remove saved custom headers (leave unchecked to keep them)
+                  </label>
+                )}
               </div>
               <p className="mt-3 text-xs leading-5 text-zinc-600">Use the provider's HTTPS API base URL. Your key is sent over HTTPS, encrypted at rest, and never shown again. It stays only in this form's memory until you save or close it.</p>
               <div className="mt-5 flex justify-end gap-2">
@@ -287,7 +325,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-zinc-100">{credential.display_name}</h3>
-                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-2 py-0.5 text-[10px] text-emerald-300">Key encrypted</span>
+                      <span className="rounded-full border border-emerald-500/20 bg-emerald-500/[0.06] px-2 py-0.5 text-[10px] text-emerald-300">Key encrypted</span>{credential.has_custom_headers && <span className="rounded-full border border-violet-500/20 bg-violet-500/[0.06] px-2 py-0.5 text-[10px] text-violet-300">Custom headers encrypted</span>}
                     </div>
                     <p className="mt-1 text-xs text-zinc-500">{credential.provider_name} · {credential.model_id}</p>
                     <p className="mt-1 break-all text-xs text-zinc-600">{credential.base_url}</p>
