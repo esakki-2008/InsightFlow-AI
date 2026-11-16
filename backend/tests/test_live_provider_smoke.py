@@ -12,9 +12,9 @@ import pytest
 from app.services.native_provider_service import (
     PROTOCOL_ANTHROPIC,
     PROTOCOL_GEMINI,
-    test_native_provider_connection,
+    test_native_provider_connection as run_native_provider_connection,
 )
-from app.services.openai_compatible_service import test_openai_compatible_connection
+from app.services.openai_compatible_service import test_openai_compatible_connection as run_openai_compatible_connection
 
 
 LIVE_TESTS_ENABLED = os.getenv("INSIGHTFLOW_LIVE_PROVIDER_TESTS", "").strip() == "1"
@@ -50,7 +50,7 @@ pytestmark = pytest.mark.skipif(
 
 
 def test_live_openai_compatible_provider():
-    result = test_openai_compatible_connection(
+    result = run_openai_compatible_connection(
         api_key=_required("INSIGHTFLOW_LIVE_OPENAI_API_KEY"),
         base_url=_required("INSIGHTFLOW_LIVE_OPENAI_BASE_URL"),
         model=_required("INSIGHTFLOW_LIVE_OPENAI_MODEL"),
@@ -61,7 +61,7 @@ def test_live_openai_compatible_provider():
 
 
 def test_live_gemini_native_provider():
-    result = test_native_provider_connection(
+    result = run_native_provider_connection(
         protocol=PROTOCOL_GEMINI,
         api_key=_required("INSIGHTFLOW_LIVE_GEMINI_API_KEY"),
         base_url=os.getenv("INSIGHTFLOW_LIVE_GEMINI_BASE_URL", "https://generativelanguage.googleapis.com"),
