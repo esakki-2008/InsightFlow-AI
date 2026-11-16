@@ -86,7 +86,11 @@ class UserResponse(BaseModel):
 
 def _jwt_secret() -> str:
     secret = os.getenv("INSIGHTFLOW_JWT_SECRET", "")
-    if len(secret) < 32:
+    if (
+        len(secret.encode("utf-8")) < 32
+        or secret != secret.strip()
+        or secret.lower() in {"change-me", "changeme", "your-secret", "secret"}
+    ):
         raise HTTPException(
             status_code=503,
             detail="Authentication is not configured. Set a strong INSIGHTFLOW_JWT_SECRET.",
