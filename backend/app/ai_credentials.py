@@ -1,5 +1,5 @@
 """Per-user CRUD API for encrypted OpenAI-compatible provider credentials."""
-from datetime import datetime
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -178,7 +178,7 @@ def update_credential(
     if new_key is not None:
         record.encrypted_api_key = encrypt_api_key(new_key)
         record.key_last_four = new_key[-4:]
-    record.updated_at = datetime.now(record.updated_at.tzinfo) if record.updated_at.tzinfo else datetime.utcnow()
+    record.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(record)
     return {"message": "Provider credential updated.", "credential": _credential_response(record)}
