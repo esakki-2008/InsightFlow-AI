@@ -45,10 +45,12 @@ def test_user_cannot_read_or_delete_another_users_history(auth_api_client, api_c
 
     assert second_user("GET", f"/api/v1/history/{history_id}").status_code == 404
     assert second_user("DELETE", f"/api/v1/history/{history_id}").status_code == 404
+    assert second_user("GET", "/api/v1/history").json()["total"] == 0
 
     owner_read = auth_api_client("GET", f"/api/v1/history/{history_id}")
     assert owner_read.status_code == 200
     assert owner_read.json()["item"]["summary"]["private_metric"] == "owner-one"
+    assert auth_api_client("GET", "/api/v1/history").json()["total"] == 1
 
 
 def test_user_cannot_read_or_delete_another_users_dataset_registry_item(auth_api_client, api_client):
@@ -63,6 +65,7 @@ def test_user_cannot_read_or_delete_another_users_dataset_registry_item(auth_api
 
     assert second_user("GET", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
     assert second_user("DELETE", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
+    assert second_user("GET", "/api/v1/datasets/registry").json()["total"] == 0
 
     owner_read = auth_api_client("GET", f"/api/v1/datasets/registry/{dataset_id}")
     assert owner_read.status_code == 200
