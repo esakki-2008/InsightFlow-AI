@@ -50,12 +50,11 @@ export default function ModelRegistryWorkbench({ onBack }: Props) {
   const [showRegisteredOnly, setShowRegisteredOnly] = useState(false)
 
   const loadModels = useCallback(async () => {
-    setLoading(true)
-    setError('')
     try {
       const response = await fetch(`${API_URL}/api/v1/ml/models`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to load the model registry.')
+      setError('')
       setData(result as RegistryResponse)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to connect to the backend.')
@@ -85,7 +84,7 @@ export default function ModelRegistryWorkbench({ onBack }: Props) {
             <h1 className="text-3xl font-bold tracking-tight">ML Model Registry</h1>
             <p className="mt-2 max-w-2xl text-sm text-zinc-500">Browse trained model bundles, evaluation metrics and database registration metadata.</p>
           </div>
-          <button onClick={() => void loadModels()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium hover:bg-white/[0.08] disabled:opacity-50"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh registry</button>
+          <button onClick={() => { setLoading(true); setError(''); void loadModels() }} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2.5 text-sm font-medium hover:bg-white/[0.08] disabled:opacity-50"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Refresh registry</button>
         </header>
 
         {error && <div className="flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/5 p-4 text-sm text-red-300"><AlertCircle size={18} className="mt-0.5 shrink-0" />{error}</div>}
