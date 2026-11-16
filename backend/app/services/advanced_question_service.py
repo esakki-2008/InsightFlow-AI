@@ -57,13 +57,13 @@ def _provider_chat(
         completion_url = endpoint + "/chat/completions"
 
     request_payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.1,
-            "top_p": 0.9,
-            "max_tokens": max_tokens,
-            "stream": False,
-        }
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+        "top_p": 0.9,
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
     data = (_post_json(completion_url, api_key, request_payload, custom_headers)
             if custom_headers else _post_json(completion_url, api_key, request_payload))
     choices = data.get("choices") or []
@@ -337,6 +337,7 @@ def answer_advanced_dataset_question(
         base_url=base_url,
         max_tokens=350,
         protocol=protocol,
+        custom_headers=custom_headers,
     )
     return {
         "question": prompt,
