@@ -232,7 +232,7 @@ def test_advanced_dataset_qa_uses_only_the_authenticated_users_saved_provider(au
         "POST",
         "/api/v1/datasets/ask/advanced",
         data={"question": "How many rows?", "credential_id": credential_id},
-        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+        files={"file": ("sample.csv", b"value\n1\n2\n", "text/csv")},
     )
 
     assert response.status_code == 200
@@ -261,7 +261,7 @@ def test_advanced_dataset_qa_cannot_use_another_users_saved_provider(auth_api_cl
         "/api/v1/datasets/ask/advanced",
         headers=other_headers,
         data={"question": "How many rows?", "credential_id": credential_id},
-        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+        files={"file": ("sample.csv", b"value\n1\n2\n", "text/csv")},
     )
 
     assert response.status_code == 404
