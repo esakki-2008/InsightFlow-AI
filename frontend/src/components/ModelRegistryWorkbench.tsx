@@ -63,7 +63,10 @@ export default function ModelRegistryWorkbench({ onBack }: Props) {
     }
   }, [])
 
-  useEffect(() => { void Promise.resolve().then(loadModels) }, [loadModels])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => { void loadModels() }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [loadModels])
 
   const models = useMemo(() => {
     const items = data?.models ?? []
