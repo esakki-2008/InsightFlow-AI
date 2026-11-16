@@ -52,3 +52,23 @@ def api_client():
         app.dependency_overrides.pop(get_db, None)
         Base.metadata.drop_all(bind=test_engine)
         test_engine.dispose()
+
+
+@pytest.fixture
+def auth_api_client(api_client, monkeypatch):
+    """Provide a client authenticated as an isolated test account."""
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    registered = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "owner@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert registered.status_code == 201
+    token = registered.json()["access_token"]
+
+    def request(method: str, path: str, **kwargs):
+        headers = dict(kwargs.pop("headers", {}) or {})
+        headers["Authorization"] = f"Bearer {token}"
+        return api_client(method, path, headers=headers, **kwargs)
+
+    return request
