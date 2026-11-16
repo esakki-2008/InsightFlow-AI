@@ -89,6 +89,7 @@ def get_current_user(
 
 @router.post("/register", status_code=201)
 def register(credentials: AuthCredentials, db: Session = Depends(get_db)):
+    _jwt_secret()
     existing = db.query(User).filter(User.email == credentials.email).first()
     if existing:
         raise HTTPException(status_code=409, detail="An account with this email already exists.")
@@ -113,6 +114,7 @@ def register(credentials: AuthCredentials, db: Session = Depends(get_db)):
 
 @router.post("/login")
 def login(credentials: AuthCredentials, db: Session = Depends(get_db)):
+    _jwt_secret()
     user = db.query(User).filter(User.email == credentials.email).first()
     if user is None or not user.is_active or not password_hasher.verify(credentials.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password.")
