@@ -37,3 +37,21 @@ def decrypt_api_key(encrypted_api_key: str) -> str:
             status_code=503,
             detail="This saved credential cannot be decrypted. Verify the configured encryption key.",
         ) from exc
+
+
+def encrypt_secret_text(value: str, max_length: int = 8192) -> str:
+    """Encrypt arbitrary bounded provider metadata such as custom HTTP headers."""
+    if not isinstance(value, str) or len(value) > max_length:
+        raise ValueError(f"Encrypted provider metadata exceeds {max_length} characters.")
+    return _fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+
+def decrypt_secret_text(encrypted_value: str) -> str:
+    """Decrypt provider metadata for backend request construction only."""
+    try:
+        return _fernet().decrypt(encrypted_value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeEncodeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Saved provider metadata cannot be decrypted. Verify the configured encryption key.",
+        ) from exc
