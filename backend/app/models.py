@@ -93,6 +93,7 @@ class AIProviderCredential(Base):
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     model_id: Mapped[str] = mapped_column(String(200), nullable=False)
     encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    encrypted_custom_headers: Mapped[str | None] = mapped_column(Text, nullable=True)
     key_last_four: Mapped[str] = mapped_column(String(4), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
