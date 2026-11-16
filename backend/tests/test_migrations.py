@@ -58,7 +58,9 @@ def test_fresh_database_migrates_to_head_and_upgrade_is_idempotent(tmp_path):
             revision = connection.execute(
                 text("SELECT version_num FROM alembic_version")
             ).scalar_one()
-        assert revision == "0003_ai_provider_credentials"
+        assert revision == "0004_encrypted_provider_headers"
+        credential_columns = {column["name"] for column in inspector.get_columns("ai_provider_credentials")}
+        assert "encrypted_custom_headers" in credential_columns
     finally:
         engine.dispose()
 
