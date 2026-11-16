@@ -39,7 +39,7 @@ def decrypt_api_key(encrypted_api_key: str) -> str:
         ) from exc
 
 
-def encrypt_secret_text(value: str, max_length: int = 8192) -> str:
+def encrypt_secret_text(value: str, max_length: int = 10000) -> str:
     """Encrypt arbitrary bounded provider metadata such as custom HTTP headers."""
     if not isinstance(value, str) or len(value) > max_length:
         raise ValueError(f"Encrypted provider metadata exceeds {max_length} characters.")
