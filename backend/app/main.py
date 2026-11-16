@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from io import BytesIO
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from alembic import command
 from alembic.config import Config
@@ -79,13 +80,37 @@ async def add_security_headers(request, call_next):
 
 
 def get_allowed_origins() -> list[str]:
-    """Read explicitly trusted browser origins from the environment."""
+    """Read and validate explicit browser origins from the environment."""
     configured = os.getenv("BACKEND_CORS_ORIGINS", "").strip()
-    if configured:
-        return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    if not configured:
+        # Local development defaults only; production must set this variable.
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
-    # Local development defaults only; production deployments should set BACKEND_CORS_ORIGINS.
-    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+    origins = [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    if not origins:
+        raise RuntimeError("BACKEND_CORS_ORIGINS must contain at least one trusted origin.")
+
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if (
+            origin == "*"
+            or parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise RuntimeError(
+                "Invalid BACKEND_CORS_ORIGINS entry. Use exact origins such as https://app.example.com."
+            )
+        hostname = (parsed.hostname or "").lower()
+        is_localhost = hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme != "https" and not is_localhost:
+            raise RuntimeError("Non-local production CORS origins must use HTTPS.")
+
+    return origins
 
 
 app.add_middleware(
