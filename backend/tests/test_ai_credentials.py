@@ -549,3 +549,25 @@ def test_provider_transport_rejects_custom_auth_header_override(monkeypatch):
         assert "reserved header" in str(exc)
     else:
         raise AssertionError("Custom headers must not override provider authentication")
+
+
+def test_native_provider_adapter_forwards_safe_custom_headers(monkeypatch):
+    from app.services import native_provider_service as native
+    captured = {}
+
+    def fake_post(url, payload, headers, custom_headers=None):
+        captured.update({"url": url, "headers": headers, "custom_headers": custom_headers})
+        return {"content": [{"type": "text", "text": "Claude response"}]}
+
+    monkeypatch.setattr(native, "_post_json_with_headers", fake_post)
+    answer = native.native_provider_chat(
+        protocol="native_anthropic",
+        api_key="anthropic-test-secret",
+        model="claude-sonnet-4-5",
+        base_url="https://api.anthropic.com",
+        messages=[{"role": "user", "content": "hello"}],
+        custom_headers={"X-Workspace-ID": "workspace-42"},
+    )
+    assert answer == "Claude response"
+    assert captured["headers"]["x-api-key"] == "anthropic-test-secret"
+    assert captured["custom_headers"] == {"X-Workspace-ID": "workspace-42"}
