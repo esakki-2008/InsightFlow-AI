@@ -428,3 +428,107 @@ def test_advanced_dataset_qa_accepts_native_gemini_credential(auth_api_client, m
     assert captured["protocol"] == "native_gemini"
     assert captured["model"] == "gemini-2.5-flash"
     assert captured["base_url"] == "https://generativelanguage.googleapis.com"
+
+
+def test_custom_headers_are_encrypted_and_never_returned(auth_api_client, api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    headers = {"X-Workspace-ID": "workspace-42", "X-Environment": "staging"}
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload(custom_headers=headers))
+    assert created.status_code == 201
+    credential = created.json()["credential"]
+    assert credential["has_custom_headers"] is True
+    assert "custom_headers" not in credential
+    assert "encrypted_custom_headers" not in credential
+    assert "workspace-42" not in created.text
+
+    db = api_client.session_factory()
+    try:
+        from app.models import AIProviderCredential
+        from app.services.credential_crypto_service import decrypt_secret_text
+        record = db.query(AIProviderCredential).one()
+        assert record.encrypted_custom_headers
+        assert "workspace-42" not in record.encrypted_custom_headers
+        assert json.loads(decrypt_secret_text(record.encrypted_custom_headers)) == headers
+    finally:
+        db.close()
+
+
+def test_custom_headers_reject_reserved_invalid_and_duplicate_names(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    invalid_sets = [
+        {"Authorization": "Bearer attacker-value"},
+        {"X-Api-Key": "override"},
+        {"Host": "internal.example"},
+        {"Bad Header": "value"},
+        {"X-Test": "line1\r\nInjected: yes"},
+        {"X-Test": "one", "x-test": "two"},
+    ]
+    for headers in invalid_sets:
+        response = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload(custom_headers=headers))
+        assert response.status_code == 422
+
+
+def test_custom_headers_are_used_by_saved_provider_connection_test(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import ai_credentials
+    calls = {}
+
+    def fake_test(**kwargs):
+        calls.update(kwargs)
+        return {"provider": kwargs["provider_name"], "model": kwargs["model"], "connected": True, "message": "OK"}
+
+    monkeypatch.setattr(ai_credentials, "test_openai_compatible_connection", fake_test)
+    headers = {"X-Workspace-ID": "workspace-42"}
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload(custom_headers=headers))
+    credential_id = created.json()["credential"]["id"]
+    tested = auth_api_client("POST", f"/api/v1/ai/credentials/{credential_id}/test")
+    assert tested.status_code == 200
+    assert calls["custom_headers"] == headers
+    assert "workspace-42" not in tested.text
+
+
+def test_custom_headers_can_be_updated_and_cleared(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload(custom_headers={"X-Old": "old"}))
+    credential_id = created.json()["credential"]["id"]
+
+    updated = auth_api_client(
+        "PATCH", f"/api/v1/ai/credentials/{credential_id}",
+        json={"custom_headers": {"X-New": "new"}},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["credential"]["has_custom_headers"] is True
+
+    cleared = auth_api_client(
+        "PATCH", f"/api/v1/ai/credentials/{credential_id}",
+        json={"custom_headers": {}},
+    )
+    assert cleared.status_code == 200
+    assert cleared.json()["credential"]["has_custom_headers"] is False
+
+
+def test_advanced_dataset_qa_passes_saved_custom_headers_to_provider(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import main
+    calls = {}
+
+    def fake_answer(**kwargs):
+        calls.update(kwargs)
+        return {
+            "question": kwargs["question"], "answer": "Two rows.", "query_type": "row_count",
+            "result": {"rows": 2}, "rows_analyzed": 2,
+            "provider": kwargs["provider_name"], "model": kwargs["model"],
+        }
+
+    monkeypatch.setattr(main, "answer_advanced_dataset_question", fake_answer)
+    headers = {"X-Workspace-ID": "workspace-42"}
+    created = auth_api_client("POST", "/api/v1/ai/credentials", json=_payload(custom_headers=headers))
+    credential_id = created.json()["credential"]["id"]
+    response = auth_api_client(
+        "POST", "/api/v1/datasets/ask/advanced",
+        data={"question": "How many rows?", "credential_id": credential_id},
+        files={"file": ("sample.csv", b"value\n1\n2\n", "text/csv")},
+    )
+    assert response.status_code == 200
+    assert calls["custom_headers"] == headers
+    assert "workspace-42" not in response.text
