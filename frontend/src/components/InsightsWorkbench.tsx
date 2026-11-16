@@ -9,7 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 type Evidence = Record<string, string | number | boolean | null>
 type Insight = {
@@ -78,7 +78,7 @@ export default function InsightsWorkbench({ onBack }: Props) {
     try {
       const body = new FormData()
       body.append('file', file)
-      const response = await fetch(`${API_URL}/api/v1/datasets/insights`, {
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/insights`, {
         method: 'POST',
         body,
       })
@@ -91,7 +91,7 @@ export default function InsightsWorkbench({ onBack }: Props) {
 
       try {
         const summary = generated.insights.summary
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
