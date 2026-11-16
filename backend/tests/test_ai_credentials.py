@@ -274,7 +274,7 @@ def test_native_gemini_adapter_uses_native_endpoint_and_api_key_header(monkeypat
 
     def fake_post(url, payload, headers):
         captured.update({"url": url, "payload": payload, "headers": headers})
-        return {"candidates": [{"content": {"parts": [{"text": "Gemini response"}]}}]}
+        return {"steps": [{"type": "model_output", "content": [{"type": "text", "text": "Gemini response"}]}]}
 
     monkeypatch.setattr(native, "_post_json_with_headers", fake_post)
     answer = native.native_provider_chat(
