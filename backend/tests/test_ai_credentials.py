@@ -382,3 +382,47 @@ def test_advanced_question_service_routes_native_protocol_to_native_adapter(monk
     assert answer == "native response"
     assert calls["protocol"] == "native_gemini"
     assert calls["api_key"] == "native-secret"
+
+
+def test_advanced_dataset_qa_accepts_native_gemini_credential(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import main
+
+    captured = {}
+
+    def fake_answer(**kwargs):
+        captured.update(kwargs)
+        return {
+            "question": kwargs["question"],
+            "answer": "There are two rows.",
+            "query_type": "row_count",
+            "result": {"rows": 2},
+            "rows_analyzed": 2,
+            "provider": kwargs["provider_name"],
+            "model": kwargs["model"],
+        }
+
+    monkeypatch.setattr(main, "answer_advanced_dataset_question", fake_answer)
+    created = auth_api_client(
+        "POST",
+        "/api/v1/ai/credentials",
+        json=_payload(
+            provider_name="Google Gemini",
+            protocol="native_gemini",
+            base_url="https://generativelanguage.googleapis.com",
+            model_id="gemini-2.5-flash",
+        ),
+    )
+    credential_id = created.json()["credential"]["id"]
+
+    response = auth_api_client(
+        "POST",
+        "/api/v1/datasets/ask/advanced",
+        data={"question": "How many rows?", "credential_id": credential_id},
+        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+    )
+
+    assert response.status_code == 200
+    assert captured["protocol"] == "native_gemini"
+    assert captured["model"] == "gemini-2.5-flash"
+    assert captured["base_url"] == "https://generativelanguage.googleapis.com"
