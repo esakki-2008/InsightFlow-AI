@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import quote, urlsplit
+from urllib.parse import urlsplit
 
 from app.services.openai_compatible_service import _post_json_with_headers
 
@@ -61,27 +61,34 @@ def native_provider_chat(
     system_text, conversation = _text_messages(messages)
 
     if protocol == PROTOCOL_GEMINI:
-        if conversation and conversation[0]["role"] == "assistant":
-            raise ValueError("Gemini conversations must begin with a user message.")
-        contents = [
-            {"role": "model" if item["role"] == "assistant" else "user",
-             "parts": [{"text": item["content"]}]}
+        # Gemini Interactions is the recommended native API. Disable storage so
+        # dataset schema/questions/results are not retained as server-side interactions.
+        input_text = "\n\n".join(
+            ("User: " if item["role"] == "user" else "Assistant: ") + item["content"]
             for item in conversation
-        ]
+        )
         payload = {
-            "contents": contents,
-            "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.1},
+            "model": selected_model.removeprefix("models/"),
+            "input": input_text,
+            "store": False,
+            "generation_config": {
+                "max_output_tokens": max(1, min(int(max_tokens), 4096)),
+                "temperature": 0.1,
+            },
         }
         if system_text:
-            payload["systemInstruction"] = {"parts": [{"text": system_text}]}
-        model_path = selected_model.removeprefix("models/")
-        url = f"{endpoint}/v1beta/models/{quote(model_path, safe='')}:generateContent"
+            payload["system_instruction"] = system_text
+        url = f"{endpoint}/v1beta/interactions"
         result = _post_json_with_headers(url, payload, {"x-goog-api-key": key})
-        candidates = result.get("candidates") or []
-        if not candidates or not isinstance(candidates[0], dict):
-            raise ValueError("Gemini returned no completion candidates.")
-        parts = (candidates[0].get("content") or {}).get("parts") or []
-        text = "\n".join(part.get("text", "") for part in parts if isinstance(part, dict))
+        steps = result.get("steps") or []
+        text_parts = []
+        for step in steps:
+            if not isinstance(step, dict) or step.get("type") != "model_output":
+                continue
+            for block in step.get("content") or []:
+                if isinstance(block, dict) and block.get("type") == "text":
+                    text_parts.append(block.get("text", ""))
+        text = "\n".join(text_parts)
     elif protocol == PROTOCOL_ANTHROPIC:
         payload = {
             "model": selected_model,
