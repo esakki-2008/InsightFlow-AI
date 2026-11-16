@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import json
 import re
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-
 import numpy as np
 import pandas as pd
 
@@ -332,5 +329,5 @@ def answer_advanced_dataset_question(
         "provider": selected_provider,
         "model": selected_model,
         "execution": "validated_pandas_operation",
-        "privacy_note": "Dataset rows are processed locally. NVIDIA receives the dataset column names and inferred types plus your question for query planning, then receives the question and computed analysis result (such as aggregates, counts, or correlations) to generate the explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing these details with the selected provider.",
+        "privacy_note": f"Dataset rows are processed locally. {selected_provider} receives the dataset column names and inferred types plus your question for query planning, then receives the question and computed analysis result (such as aggregates, counts, or correlations) to generate the explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing these details with {selected_provider}.",
     }
