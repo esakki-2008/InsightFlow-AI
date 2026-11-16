@@ -150,3 +150,59 @@ def test_explore_endpoint_returns_dataset_overview(auth_api_client):
     assert payload["overview"]["total_rows"] == 2
     assert payload["overview"]["total_columns"] == 2
 
+
+
+def test_private_endpoints_require_authentication(api_client):
+    upload = api_client(
+        "POST", "/api/v1/datasets/upload",
+        files={"file": ("private.csv", b"name\nAda\n", "text/csv")},
+    )
+    history = api_client("GET", "/api/v1/history")
+    assert upload.status_code == 401
+    assert history.status_code == 401
+
+
+def test_history_and_dataset_registry_are_isolated_between_users(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    def register(email):
+        response = api_client(
+            "POST", "/api/v1/auth/register",
+            json={"email": email, "password": "correct-horse-battery-staple"},
+        )
+        assert response.status_code == 201
+        return response.json()["access_token"]
+
+    token_a = register("account-a@example.com")
+    token_b = register("account-b@example.com")
+
+    def as_user(token):
+        def request(method, path, **kwargs):
+            headers = dict(kwargs.pop("headers", {}) or {})
+            headers["Authorization"] = f"Bearer {token}"
+            return api_client(method, path, headers=headers, **kwargs)
+        return request
+
+    user_a, user_b = as_user(token_a), as_user(token_b)
+    created = user_a("POST", "/api/v1/history", json={
+        "filename": "private-a.csv", "analysis_type": "EDA", "summary": {"secret": "A"}
+    })
+    assert created.status_code == 201
+    history_id = created.json()["item"]["id"]
+
+    assert user_a("GET", "/api/v1/history").json()["total"] == 1
+    assert user_b("GET", "/api/v1/history").json()["total"] == 0
+    assert user_b("GET", f"/api/v1/history/{history_id}").status_code == 404
+    assert user_b("DELETE", f"/api/v1/history/{history_id}").status_code == 404
+    assert user_a("GET", f"/api/v1/history/{history_id}").status_code == 200
+
+    uploaded = user_a("POST", "/api/v1/datasets/upload", files={
+        "file": ("private-a.csv", b"name,score\nAda,91\n", "text/csv")
+    })
+    assert uploaded.status_code == 200
+    dataset_id = uploaded.json()["dataset"]["registry_id"]
+    assert user_a("GET", "/api/v1/datasets/registry").json()["total"] == 1
+    assert user_b("GET", "/api/v1/datasets/registry").json()["total"] == 0
+    assert user_b("GET", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
+    assert user_b("DELETE", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
+    assert user_a("GET", f"/api/v1/datasets/registry/{dataset_id}").status_code == 200
