@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import router as auth_router, get_current_user
-from app.ai_credentials import router as ai_credentials_router
+from app.ai_credentials import router as ai_credentials_router, _decrypt_custom_headers
 from app.models import AIProviderCredential, User
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
@@ -40,7 +40,7 @@ from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
 from app.services.question_suggestion_service import generate_question_suggestions
 from app.services.llm_provider_service import test_nvidia_connection
-from app.services.credential_crypto_service import decrypt_api_key, decrypt_secret_text
+from app.services.credential_crypto_service import decrypt_api_key
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
@@ -544,12 +544,7 @@ async def ask_dataset_question_advanced_endpoint(
         if credential.protocol not in {"openai_compatible", "native_gemini", "native_anthropic"}:
             raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A.")
         api_key = decrypt_api_key(credential.encrypted_api_key)
-        custom_headers = {}
-        if credential.encrypted_custom_headers:
-            try:
-                custom_headers = json.loads(decrypt_secret_text(credential.encrypted_custom_headers))
-            except (json.JSONDecodeError, TypeError) as exc:
-                raise HTTPException(status_code=503, detail="Saved provider headers are invalid.") from exc
+        custom_headers = _decrypt_custom_headers(credential)
 
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
