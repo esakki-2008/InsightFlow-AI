@@ -1,5 +1,6 @@
 
 from io import BytesIO
+import os
 
 import pandas as pd
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
@@ -45,12 +46,22 @@ def initialize_database():
     Base.metadata.create_all(bind=engine)
 
 
+def get_allowed_origins() -> list[str]:
+    """Read explicitly trusted browser origins from the environment."""
+    configured = os.getenv("BACKEND_CORS_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+
+    # Local development defaults only; production deployments should set BACKEND_CORS_ORIGINS.
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=get_allowed_origins(),
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 
