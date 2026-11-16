@@ -221,6 +221,17 @@ The optional Advanced AI question workflow uses the provider selected in the use
 
 Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. Provider API keys are encrypted at rest on the backend and scoped to the account that saved them. Only masked key metadata is returned to the frontend. Optional provider-specific HTTP headers can also be configured as a JSON object in Settings. They are encrypted at rest, never returned by the API, limited to 20 entries and 8,192 characters, and cannot override authentication or transport-critical headers. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
 
+## OpenCode Console compatibility
+
+OpenCode Console can be connected through InsightFlow AI's OpenAI-compatible protocol. Use a model that is available to external clients and configure the full Chat Completions endpoint:
+
+- Pay-as-you-go: \`https://opencode.ai/inference/openai/v1/chat/completions\`
+- OpenCode Go: \`https://opencode.ai/inference/go/openai/v1/chat/completions\`
+
+Enter the OpenCode Console API key as the provider API key and the model ID shown in the OpenCode model catalog. For OpenCode Go, add an \`x-opencode-session\` custom header with a stable session ID. InsightFlow AI forwards custom headers on both the planning and explanation requests.
+
+OpenCode documents that free-tier chat models are only available from within OpenCode; external clients need paid models or Go. Some model families use different native APIs, but the Console can translate text models between its supported API families. The OpenAI Chat Completions endpoint above is the compatible route used by InsightFlow AI.
+
 ## Security considerations
 
 The project includes:
