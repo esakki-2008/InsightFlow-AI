@@ -334,6 +334,7 @@ def answer_advanced_dataset_question(
         ],
         base_url=base_url,
         max_tokens=350,
+        protocol=protocol,
     )
     return {
         "question": prompt,
