@@ -172,3 +172,13 @@ def test_registration_rate_limit_blocks_excessive_attempts(api_client, monkeypat
     )
     assert limited.status_code == 429
     assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_auth_rejects_placeholder_jwt_secret(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "change-me")
+    response = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "placeholder@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert response.status_code == 503
