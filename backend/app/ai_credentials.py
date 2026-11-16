@@ -13,6 +13,9 @@ from app.database import get_db
 from app.models import AIProviderCredential, User
 from app.services.credential_crypto_service import decrypt_api_key, encrypt_api_key
 from app.services.openai_compatible_service import test_openai_compatible_connection
+from app.services.native_provider_service import (
+    PROTOCOL_GEMINI, PROTOCOL_ANTHROPIC, test_native_provider_connection,
+)
 
 router = APIRouter(prefix="/api/v1/ai/credentials", tags=["AI provider credentials"])
 
@@ -44,7 +47,7 @@ def _validate_base_url(value: str) -> str:
 class CredentialCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=80)
     provider_name: str = Field(min_length=1, max_length=80)
-    protocol: str = Field(default="openai_compatible", pattern="^openai_compatible$")
+    protocol: str = Field(default="openai_compatible", pattern="^(openai_compatible|native_gemini|native_anthropic)$")
     base_url: str = Field(min_length=8, max_length=500)
     model_id: str = Field(min_length=1, max_length=200)
     api_key: str = Field(min_length=1, max_length=4096)
@@ -217,11 +220,21 @@ def test_saved_credential(
     record = _owned_credential(db, credential_id, current_user)
     api_key = decrypt_api_key(record.encrypted_api_key)
     try:
-        return test_openai_compatible_connection(
-            api_key=api_key,
-            base_url=record.base_url,
-            model=record.model_id,
-            provider_name=record.provider_name,
-        )
+        if record.protocol == "openai_compatible":
+            return test_openai_compatible_connection(
+                api_key=api_key,
+                base_url=record.base_url,
+                model=record.model_id,
+                provider_name=record.provider_name,
+            )
+        if record.protocol in {PROTOCOL_GEMINI, PROTOCOL_ANTHROPIC}:
+            return test_native_provider_connection(
+                protocol=record.protocol,
+                api_key=api_key,
+                base_url=record.base_url,
+                model=record.model_id,
+                provider_name=record.provider_name,
+            )
+        raise ValueError("The saved provider protocol is not supported.")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
