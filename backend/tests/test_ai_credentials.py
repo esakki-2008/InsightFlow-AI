@@ -1,4 +1,5 @@
 """Security and ownership tests for encrypted AI provider credentials."""
+import json
 from cryptography.fernet import Fernet
 
 
