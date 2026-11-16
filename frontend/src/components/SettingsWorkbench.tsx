@@ -280,7 +280,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
                   <input required maxLength={80} className={inputClass} placeholder="My NVIDIA account" value={form.display_name} onChange={(event) => setForm({ ...form, display_name: event.target.value })} />
                 </label>
                 <label className={labelClass}>Provider name
-                  <input required maxLength={80} className={inputClass} placeholder="NVIDIA, OpenRouter, Groq..." value={form.provider_name} onChange={(event) => setForm({ ...form, provider_name: event.target.value })} />
+                  <input required maxLength={80} className={inputClass} placeholder="OpenCode, NVIDIA, OpenRouter, Groq..." value={form.provider_name} onChange={(event) => setForm({ ...form, provider_name: event.target.value })} />
                 </label>
                 <label className={labelClass + ' sm:col-span-2'}>API base URL
                   <input required type="url" maxLength={500} className={inputClass} placeholder={form.protocol === 'native_gemini' ? 'https://generativelanguage.googleapis.com' : form.protocol === 'native_anthropic' ? 'https://api.anthropic.com' : 'https://integrate.api.nvidia.com/v1'} value={form.base_url} onChange={(event) => setForm({ ...form, base_url: event.target.value })} />
