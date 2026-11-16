@@ -419,7 +419,7 @@ def test_advanced_dataset_qa_accepts_native_gemini_credential(auth_api_client, m
         "POST",
         "/api/v1/datasets/ask/advanced",
         data={"question": "How many rows?", "credential_id": credential_id},
-        files={"file": ("sample.csv", b"value\\n1\\n2\\n", "text/csv")},
+        files={"file": ("sample.csv", b"value\n1\n2\n", "text/csv")},
     )
 
     assert response.status_code == 200
