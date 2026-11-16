@@ -206,3 +206,34 @@ def test_history_and_dataset_registry_are_isolated_between_users(api_client, mon
     assert user_b("GET", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
     assert user_b("DELETE", f"/api/v1/datasets/registry/{dataset_id}").status_code == 404
     assert user_a("GET", f"/api/v1/datasets/registry/{dataset_id}").status_code == 200
+
+
+def test_cors_rejects_wildcard_origin(monkeypatch):
+    import pytest
+    from app.main import get_allowed_origins
+
+    monkeypatch.setenv("BACKEND_CORS_ORIGINS", "*")
+    with pytest.raises(RuntimeError, match="Invalid BACKEND_CORS_ORIGINS"):
+        get_allowed_origins()
+
+
+def test_cors_rejects_insecure_remote_origin(monkeypatch):
+    import pytest
+    from app.main import get_allowed_origins
+
+    monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://app.example.com")
+    with pytest.raises(RuntimeError, match="must use HTTPS"):
+        get_allowed_origins()
+
+
+def test_cors_accepts_exact_https_and_local_origins(monkeypatch):
+    from app.main import get_allowed_origins
+
+    monkeypatch.setenv(
+        "BACKEND_CORS_ORIGINS",
+        "https://app.example.com,http://localhost:5173/",
+    )
+    assert get_allowed_origins() == [
+        "https://app.example.com",
+        "http://localhost:5173",
+    ]
