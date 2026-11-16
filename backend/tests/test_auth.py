@@ -126,3 +126,49 @@ def test_auth_rejects_non_bearer_authorization_scheme(api_client, monkeypatch):
         headers={"Authorization": "Basic dXNlcjpwYXNz"},
     )
     assert response.status_code == 401
+
+
+
+def test_login_rate_limit_returns_429_and_retry_after(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    responses = [
+        api_client(
+            "POST",
+            "/api/v1/auth/login",
+            json={"email": "missing@example.com", "password": "incorrect-password-value"},
+        )
+        for _ in range(5)
+    ]
+    assert all(response.status_code == 401 for response in responses)
+
+    limited = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_registration_rate_limit_blocks_excessive_attempts(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    for index in range(3):
+        response = api_client(
+            "POST",
+            "/api/v1/auth/register",
+            json={
+                "email": f"rate-limit-{index}@example.com",
+                "password": "correct-horse-battery-staple",
+            },
+        )
+        assert response.status_code == 201
+
+    limited = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "rate-limit-extra@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
