@@ -115,6 +115,7 @@ Create a virtual environment and install the Python dependencies.
 **Windows PowerShell**
 
 ```powershell
+$env:INSIGHTFLOW_JWT_SECRET = python -c "import secrets; print(secrets.token_urlsafe(48))"
 python -m venv backend/.venv
 .\backend\.venv\Scripts\Activate.ps1
 python -m pip install -r backend/requirements.txt
@@ -125,6 +126,7 @@ python -m uvicorn app.main:app --reload --app-dir backend
 **macOS / Linux**
 
 ```bash
+export INSIGHTFLOW_JWT_SECRET="$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')"
 python3 -m venv backend/.venv
 source backend/.venv/bin/activate
 python -m pip install -r backend/requirements.txt
@@ -140,7 +142,7 @@ The backend is available at:
 | Swagger UI | http://127.0.0.1:8000/docs |
 | Health check | http://127.0.0.1:8000/api/v1/health |
 
-Database migrations are applied when the application starts. SQLite is the default database. To use PostgreSQL, configure `DATABASE_URL` before starting the backend.
+Database migrations are applied when the application starts. SQLite is the default database. To use PostgreSQL, configure `DATABASE_URL` before starting the backend. Email/password authentication uses Argon2 password hashing and short-lived JWT bearer tokens. Before starting the backend, configure a private JWT signing secret:
 
 ### 3. Configure and start the frontend
 
@@ -199,6 +201,7 @@ The GitHub Actions workflow runs the backend test suite and frontend production 
 | Variable | Component | Description |
 |---|---|---|
 | `DATABASE_URL` | Backend | SQLAlchemy database connection string. SQLite is used when no external database is configured. |
+| `INSIGHTFLOW_JWT_SECRET` | Backend | Random secret of at least 32 characters used to sign access tokens. Keep it private and stable across backend restarts. |
 | `BACKEND_CORS_ORIGINS` | Backend | Comma-separated list of allowed frontend origins. |
 | `VITE_API_URL` | Frontend | Backend API base URL used by the Vite application. |
 
@@ -222,13 +225,16 @@ Do not use this feature with confidential, regulated, or personal data unless yo
 
 The project includes:
 
+- Email registration and login with Argon2 password hashing.
+- Short-lived JWT bearer tokens and an authenticated account-profile endpoint.
+- Nullable owner references for history, dataset registry, and ML model records; legacy rows remain unassigned until an explicit ownership migration is chosen.
 - File upload validation for supported formats, file size, and dataset dimensions.
 - Baseline HTTP security headers.
 - Configurable CORS origins.
 - Database schema migrations.
 - Automated backend tests and frontend build checks.
 
-These controls are not a substitute for a complete production security deployment. Before exposing the application publicly, implement and verify appropriate authentication and authorization, rate limiting, HTTPS, secret management, database backups, logging, monitoring, and production-specific upload/storage controls.
+Authentication is being introduced in phases. Until backend authorization is applied to every private API route, records and model artifacts are owner-scoped, and cross-account isolation tests pass, do not expose the application publicly or treat it as a secure multi-user deployment. Rate limiting, HTTPS, secret management, database backups, logging, monitoring, and production-specific upload/storage controls are also required.
 
 ## Repository structure
 
