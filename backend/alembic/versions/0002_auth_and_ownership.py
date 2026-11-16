@@ -40,7 +40,7 @@ def upgrade() -> None:
                     Column(
                         "user_id",
                         String(length=36),
-                        ForeignKey("users.id"),
+                        ForeignKey("users.id", name=f"fk_{table}_user_id_users"),
                         nullable=True,
                     )
                 )
