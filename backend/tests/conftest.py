@@ -46,6 +46,8 @@ def api_client():
 
         return asyncio.run(send())
 
+    request.session_factory = TestingSessionLocal
+
     try:
         yield request
     finally:
