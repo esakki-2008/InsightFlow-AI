@@ -136,8 +136,7 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
     try {
       const saved = localStorage.getItem(storageKey('recent_datasets'))
       if (saved) return JSON.parse(saved) as DatasetInfo[]
-      const latest = localStorage.getItem('insightflow_dashboard_dataset')
-      return latest ? [JSON.parse(latest) as DatasetInfo] : []
+      return []
     } catch {
       return []
     }
