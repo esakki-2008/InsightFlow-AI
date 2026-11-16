@@ -265,3 +265,22 @@ def test_redis_rate_limiter_fails_closed_when_store_is_unavailable(api_client, m
     )
     assert response.status_code == 503
     assert "temporarily unavailable" in response.json()["detail"]
+
+
+def test_redis_rate_limiter_fails_closed_for_invalid_url(api_client, monkeypatch):
+    import app.auth as auth_module
+
+    def invalid_redis_client():
+        raise ValueError("Invalid Redis URL")
+
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("REDIS_URL", "not-a-valid-redis-url")
+    monkeypatch.setattr(auth_module, "_get_redis_client", invalid_redis_client)
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 503
+    assert "temporarily unavailable" in response.json()["detail"]
