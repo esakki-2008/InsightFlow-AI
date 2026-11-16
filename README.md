@@ -213,7 +213,7 @@ InsightFlow AI processes uploaded dataset content for the requested analysis. Th
 
 ### Saved AI provider connections (optional)
 
-The optional Advanced AI question workflow uses the provider selected in the user's authenticated Settings workspace. Supported protocols are OpenAI-compatible chat completions, the native Google Gemini API, and the native Anthropic Messages API:
+The optional Advanced AI question workflow uses the provider selected in the user's authenticated Settings workspace. Supported protocols are OpenAI-compatible chat completions, the native Google Gemini Interactions API (stateless requests with `store=false`), and the native Anthropic Messages API:
 
 1. Dataset column names and inferred data types, together with the user's question, are sent for query planning.
 2. The user's question and the computed analysis result (for example, aggregates, counts, or correlations) are sent to generate the explanation.
