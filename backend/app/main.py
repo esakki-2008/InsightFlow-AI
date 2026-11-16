@@ -14,7 +14,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.auth import router as auth_router
+from app.auth import router as auth_router, get_current_user
+from app.models import User
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
 from app.models import AnalysisHistory
@@ -113,13 +114,14 @@ def health_check():
     }
 
 
-@app.post("/api/v1/datasets/upload")
-async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db)):
+@app.post("/api/v1/datasets/upload", dependencies=[Depends(get_current_user)])
+async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     try:
         content = await file.read(10 * 1024 * 1024 + 1)
         result = inspect_dataset(filename=file.filename or "unknown", content=content)
 
         record = models.DatasetRecord(
+            user_id=current_user.id,
             filename=result["filename"],
             file_type=result["file_type"],
             file_size_bytes=result["file_size_bytes"],
@@ -151,7 +153,7 @@ async def upload_dataset(file: UploadFile = File(...), db: Session = Depends(get
         await file.close()
 
 
-@app.post("/api/v1/datasets/explore")
+@app.post("/api/v1/datasets/explore", dependencies=[Depends(get_current_user)])
 async def explore_dataset(
     file: UploadFile = File(...),
     page: int = Form(1),
@@ -198,7 +200,7 @@ async def explore_dataset(
         await file.close()
 
 
-@app.post("/api/v1/datasets/statistics")
+@app.post("/api/v1/datasets/statistics", dependencies=[Depends(get_current_user)])
 async def dataset_statistics_endpoint(file: UploadFile = File(...)):
     """Generate advanced distribution, correlation, and group-comparison statistics."""
     try:
@@ -225,7 +227,7 @@ async def dataset_statistics_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/executive-report")
+@app.post("/api/v1/datasets/executive-report", dependencies=[Depends(get_current_user)])
 async def executive_report_endpoint(file: UploadFile = File(...)):
     """Create a concise executive report from local dataset statistics."""
     try:
@@ -252,7 +254,7 @@ async def executive_report_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/quality")
+@app.post("/api/v1/datasets/quality", dependencies=[Depends(get_current_user)])
 async def dataset_quality_endpoint(file: UploadFile = File(...)):
     """Generate an overall and column-level data quality report."""
     try:
@@ -279,7 +281,7 @@ async def dataset_quality_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/export/analytics.xlsx")
+@app.post("/api/v1/datasets/export/analytics.xlsx", dependencies=[Depends(get_current_user)])
 async def export_analytics_excel(file: UploadFile = File(...)):
     """Export a multi-sheet Excel analytics report for an uploaded dataset."""
     try:
@@ -377,7 +379,7 @@ async def export_analytics_excel(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/insights")
+@app.post("/api/v1/datasets/insights", dependencies=[Depends(get_current_user)])
 async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
     """Generate evidence-backed plain-English insights for an uploaded dataset."""
     try:
@@ -414,7 +416,7 @@ async def generate_dataset_insights_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/ask")
+@app.post("/api/v1/datasets/ask", dependencies=[Depends(get_current_user)])
 async def ask_dataset_question_endpoint(
     file: UploadFile = File(...),
     question: str = Form(...),
@@ -454,7 +456,7 @@ async def ask_dataset_question_endpoint(
         await file.close()
 
 
-@app.post("/api/v1/datasets/suggest-questions")
+@app.post("/api/v1/datasets/suggest-questions", dependencies=[Depends(get_current_user)])
 async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
     """Profile a dataset locally and return relevant, supported question suggestions."""
     try:
@@ -491,7 +493,7 @@ async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/ask/advanced")
+@app.post("/api/v1/datasets/ask/advanced", dependencies=[Depends(get_current_user)])
 async def ask_dataset_question_advanced_endpoint(
     file: UploadFile = File(...),
     question: str = Form(...),
@@ -538,7 +540,7 @@ async def ask_dataset_question_advanced_endpoint(
         await file.close()
 
 
-@app.post("/api/v1/ai/providers/nvidia/test")
+@app.post("/api/v1/ai/providers/nvidia/test", dependencies=[Depends(get_current_user)])
 async def test_nvidia_provider_endpoint(
     api_key: str = Form(...),
     model: str = Form("meta/llama-3.3-70b-instruct"),
@@ -550,7 +552,7 @@ async def test_nvidia_provider_endpoint(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/api/v1/ml/prepare")
+@app.post("/api/v1/ml/prepare", dependencies=[Depends(get_current_user)])
 async def prepare_ml_dataset(
     file: UploadFile = File(...),
     target_column: str = Form("Label"),
@@ -599,13 +601,14 @@ async def prepare_ml_dataset(
 
 
 
-@app.post("/api/v1/ml/train")
+@app.post("/api/v1/ml/train", dependencies=[Depends(get_current_user)])
 async def train_ml_models(
     file: UploadFile = File(...),
     target_column: str = Form("Label"),
     test_size: float = Form(0.2),
     random_state: int = Form(42),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Train baseline binary classifiers and evaluate on a stratified holdout set."""
     try:
@@ -633,9 +636,11 @@ async def train_ml_models(
         training = train_classification_models(
             prepared=prepared,
             random_state=random_state,
+            user_id=current_user.id,
         )
         model_record = models.MLModelRecord(
             id=training["model_id"],
+            user_id=current_user.id,
             dataset_filename=filename,
             target_column=prepared["summary"]["target_column"],
             feature_count=training["feature_count"],
@@ -673,14 +678,14 @@ async def train_ml_models(
         await file.close()
 
 
-@app.get("/api/v1/ml/models")
-def get_saved_ml_models(db: Session = Depends(get_db)):
+@app.get("/api/v1/ml/models", dependencies=[Depends(get_current_user)])
+def get_saved_ml_models(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Return saved model bundles enriched with persistent database metadata."""
     try:
-        result = list_saved_models()
+        result = list_saved_models(user_id=current_user.id)
         records = {
             record.id: record
-            for record in db.query(models.MLModelRecord).all()
+            for record in db.query(models.MLModelRecord).filter(models.MLModelRecord.user_id == current_user.id).all()
         }
         for item in result.get("models", []):
             record = records.get(item["model_id"])
@@ -698,11 +703,13 @@ def get_saved_ml_models(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
-@app.post("/api/v1/ml/predict")
+@app.post("/api/v1/ml/predict", dependencies=[Depends(get_current_user)])
 async def predict_with_trained_model(
     file: UploadFile = File(...),
     model_id: str = Form(...),
     model_name: str = Form("Random Forest"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Predict labels for a new dataset using a previously saved model."""
     try:
@@ -721,7 +728,11 @@ async def predict_with_trained_model(
         else:
             raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
 
+        owned_model = db.query(models.MLModelRecord).filter(models.MLModelRecord.id == model_id, models.MLModelRecord.user_id == current_user.id).first()
+        if owned_model is None:
+            raise HTTPException(status_code=404, detail="Saved model not found.")
         result = predict_with_saved_model(
+            user_id=current_user.id,
             dataframe=dataframe,
             model_id=model_id,
             model_name=model_name,
@@ -743,12 +754,14 @@ async def predict_with_trained_model(
         await file.close()
 
 
-@app.post("/api/v1/ml/explain")
+@app.post("/api/v1/ml/explain", dependencies=[Depends(get_current_user)])
 async def explain_saved_model_prediction(
     file: UploadFile = File(...),
     model_id: str = Form(...),
     model_name: str = Form("Random Forest"),
     row_index: int = Form(0),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Explain one prediction using local median-replacement sensitivity."""
     try:
@@ -767,7 +780,11 @@ async def explain_saved_model_prediction(
         else:
             raise ValueError("Unsupported file type. Upload CSV, XLSX, or XLS.")
 
+        owned_model = db.query(models.MLModelRecord).filter(models.MLModelRecord.id == model_id, models.MLModelRecord.user_id == current_user.id).first()
+        if owned_model is None:
+            raise HTTPException(status_code=404, detail="Saved model not found.")
         explanation = explain_prediction(
+            user_id=current_user.id,
             dataframe=dataframe,
             model_id=model_id,
             model_name=model_name,
@@ -790,7 +807,7 @@ async def explain_saved_model_prediction(
         await file.close()
 
 
-@app.post("/api/v1/datasets/chart")
+@app.post("/api/v1/datasets/chart", dependencies=[Depends(get_current_user)])
 async def build_dataset_chart(
     file: UploadFile = File(...),
     x_column: str = Form(...),
@@ -843,7 +860,7 @@ async def build_dataset_chart(
         await file.close()
 
 
-@app.post("/api/v1/datasets/clean/preview")
+@app.post("/api/v1/datasets/clean/preview", dependencies=[Depends(get_current_user)])
 async def preview_dataset_cleaning(file: UploadFile = File(...)):
     try:
         filename = file.filename or "unknown"
@@ -883,7 +900,7 @@ async def preview_dataset_cleaning(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/clean/apply")
+@app.post("/api/v1/datasets/clean/apply", dependencies=[Depends(get_current_user)])
 async def apply_dataset_cleaning(
     file: UploadFile = File(...),
     confirm: bool = Form(False),
@@ -960,8 +977,8 @@ def _history_item(record: AnalysisHistory) -> dict:
     }
 
 
-@app.post("/api/v1/history", status_code=201)
-def create_analysis_history(payload: HistoryCreate, db: Session = Depends(get_db)):
+@app.post("/api/v1/history", status_code=201, dependencies=[Depends(get_current_user)])
+def create_analysis_history(payload: HistoryCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Persist analysis metadata and a compact result summary, never raw dataset rows."""
     import json
 
@@ -970,6 +987,7 @@ def create_analysis_history(payload: HistoryCreate, db: Session = Depends(get_db
         raise HTTPException(status_code=413, detail="Summary is too large. Keep it under 100 KB.")
 
     record = AnalysisHistory(
+        user_id=current_user.id,
         filename=payload.filename,
         analysis_type=payload.analysis_type,
         row_count=payload.row_count,
@@ -983,17 +1001,18 @@ def create_analysis_history(payload: HistoryCreate, db: Session = Depends(get_db
     return {"message": "Analysis history saved successfully", "item": _history_item(record)}
 
 
-@app.get("/api/v1/history")
+@app.get("/api/v1/history", dependencies=[Depends(get_current_user)])
 def list_analysis_history(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return paginated analysis history, newest first."""
-    total = db.query(AnalysisHistory).count()
+    query = db.query(AnalysisHistory).filter(AnalysisHistory.user_id == current_user.id)
+    total = query.count()
     records = (
-        db.query(AnalysisHistory)
-        .order_by(AnalysisHistory.created_at.desc(), AnalysisHistory.id.desc())
+        query.order_by(AnalysisHistory.created_at.desc(), AnalysisHistory.id.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -1006,17 +1025,17 @@ def list_analysis_history(
     }
 
 
-@app.get("/api/v1/history/{history_id}")
-def get_analysis_history(history_id: str, db: Session = Depends(get_db)):
+@app.get("/api/v1/history/{history_id}", dependencies=[Depends(get_current_user)])
+def get_analysis_history(history_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Return one saved analysis record."""
-    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
+    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id, AnalysisHistory.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Analysis history record not found.")
     return {"item": _history_item(record)}
 
 
-@app.delete("/api/v1/history/{history_id}")
-def delete_analysis_history(history_id: str, db: Session = Depends(get_db)):
+@app.delete("/api/v1/history/{history_id}", dependencies=[Depends(get_current_user)])
+def delete_analysis_history(history_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete one saved analysis record."""
     record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
     if record is None:
@@ -1026,17 +1045,18 @@ def delete_analysis_history(history_id: str, db: Session = Depends(get_db)):
     return {"message": "Analysis history deleted successfully", "id": history_id}
 
 
-@app.get("/api/v1/datasets/registry")
+@app.get("/api/v1/datasets/registry", dependencies=[Depends(get_current_user)])
 def list_dataset_registry(
     limit: int = Query(default=20, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List registered dataset metadata, newest first. Source files and rows are never stored."""
-    total = db.query(models.DatasetRecord).count()
+    query = db.query(models.DatasetRecord).filter(models.DatasetRecord.user_id == current_user.id)
+    total = query.count()
     records = (
-        db.query(models.DatasetRecord)
-        .order_by(models.DatasetRecord.created_at.desc(), models.DatasetRecord.id.desc())
+        query.order_by(models.DatasetRecord.created_at.desc(), models.DatasetRecord.id.desc())
         .offset(offset)
         .limit(limit)
         .all()
@@ -1049,16 +1069,16 @@ def list_dataset_registry(
     }
 
 
-@app.get("/api/v1/datasets/registry/{dataset_id}")
-def get_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db)):
-    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
+@app.get("/api/v1/datasets/registry/{dataset_id}", dependencies=[Depends(get_current_user)])
+def get_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id, models.DatasetRecord.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Dataset registry record not found.")
     return {"item": _dataset_registry_item(record)}
 
 
-@app.delete("/api/v1/datasets/registry/{dataset_id}")
-def delete_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db)):
+@app.delete("/api/v1/datasets/registry/{dataset_id}", dependencies=[Depends(get_current_user)])
+def delete_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Dataset registry record not found.")
