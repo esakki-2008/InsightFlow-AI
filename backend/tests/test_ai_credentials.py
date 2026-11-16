@@ -571,3 +571,45 @@ def test_native_provider_adapter_forwards_safe_custom_headers(monkeypatch):
     assert answer == "Claude response"
     assert captured["headers"]["x-api-key"] == "anthropic-test-secret"
     assert captured["custom_headers"] == {"X-Workspace-ID": "workspace-42"}
+
+
+def test_opencode_inference_openai_endpoint_is_not_double_appended(monkeypatch):
+    from app.services import advanced_question_service as advanced
+    captured = {}
+
+    def fake_post(url, api_key, payload, custom_headers=None):
+        captured.update({"url": url, "api_key": api_key, "payload": payload, "custom_headers": custom_headers})
+        return {"choices": [{"message": {"content": "OK"}}]}
+
+    monkeypatch.setattr(advanced, "_post_json", fake_post)
+    answer = advanced._provider_chat(
+        api_key="opencode-test-token",
+        model="glm-5.3",
+        messages=[{"role": "user", "content": "hello"}],
+        base_url="https://opencode.ai/inference/openai/v1/chat/completions",
+        custom_headers={"X-Workspace-ID": "team-42"},
+    )
+    assert answer == "OK"
+    assert captured["url"] == "https://opencode.ai/inference/openai/v1/chat/completions"
+    assert captured["api_key"] == "opencode-test-token"
+    assert captured["custom_headers"] == {"X-Workspace-ID": "team-42"}
+
+
+def test_opencode_go_session_header_is_forwarded(monkeypatch):
+    from app.services import advanced_question_service as advanced
+    captured = {}
+
+    def fake_post(url, api_key, payload, custom_headers=None):
+        captured.update({"url": url, "custom_headers": custom_headers})
+        return {"choices": [{"message": {"content": "OK"}}]}
+
+    monkeypatch.setattr(advanced, "_post_json", fake_post)
+    advanced._provider_chat(
+        api_key="opencode-go-token",
+        model="glm-5.3",
+        messages=[{"role": "user", "content": "hello"}],
+        base_url="https://opencode.ai/inference/go/openai/v1/chat/completions",
+        custom_headers={"x-opencode-session": "ses_example"},
+    )
+    assert captured["url"] == "https://opencode.ai/inference/go/openai/v1/chat/completions"
+    assert captured["custom_headers"] == {"x-opencode-session": "ses_example"}
