@@ -289,10 +289,12 @@ def test_native_gemini_adapter_uses_native_endpoint_and_api_key_header(monkeypat
     )
 
     assert answer == "Gemini response"
-    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/interactions"
     assert captured["headers"] == {"x-goog-api-key": "gemini-test-secret"}
-    assert captured["payload"]["systemInstruction"]["parts"][0]["text"] == "Be concise."
-    assert captured["payload"]["contents"][0]["role"] == "user"
+    assert captured["payload"]["system_instruction"] == "Be concise."
+    assert captured["payload"]["model"] == "gemini-2.5-flash"
+    assert captured["payload"]["store"] is False
+    assert captured["payload"]["input"] == "User: Count rows."
 
 
 def test_native_anthropic_adapter_uses_messages_api_and_version_header(monkeypatch):
