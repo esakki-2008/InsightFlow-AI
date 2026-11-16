@@ -9,6 +9,7 @@ from app.services.ml_model_service import load_model_bundle
 def explain_prediction(
     dataframe: pd.DataFrame,
     model_id: str,
+    user_id: str,
     model_name: str,
     row_index: int = 0,
     top_n: int = 10,
@@ -24,7 +25,7 @@ def explain_prediction(
             f"row_index must be between 0 and {len(dataframe) - 1}."
         )
 
-    bundle = load_model_bundle(model_id)
+    bundle = load_model_bundle(model_id, user_id)
     estimators = bundle["estimators"]
     if model_name not in estimators:
         available = ", ".join(sorted(estimators))
