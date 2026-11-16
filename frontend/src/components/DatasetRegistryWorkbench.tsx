@@ -26,12 +26,11 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
   const [selected, setSelected] = useState<DatasetRecord | null>(null)
 
   const loadRegistry = useCallback(async () => {
-    setLoading(true)
-    setError('')
     try {
       const response = await fetch(`${API_URL}/api/v1/datasets/registry?limit=50&offset=0`)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to load dataset registry.')
+      setError('')
       setItems(payload.items || [])
       setTotal(Number(payload.total) || 0)
     } catch (err) {
@@ -50,6 +49,8 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to delete registry record.')
       if (selected?.id === id) setSelected(null)
+      setLoading(true)
+      setError('')
       await loadRegistry()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to delete registry record.')
@@ -61,7 +62,7 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
       <button onClick={onBack} className="mb-6 inline-flex items-center gap-2 text-sm text-zinc-400 hover:text-white"><ArrowLeft size={16}/>Back to overview</button>
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div><div className="flex items-center gap-2 text-violet-300"><Database size={18}/><span className="text-xs font-semibold tracking-[2px]">PERSISTENT WORKSPACE</span></div><h1 className="mt-2 text-3xl font-bold">Dataset registry.</h1><p className="mt-2 text-sm text-zinc-500">Browse datasets inspected and registered in your local database.</p></div>
-        <button onClick={() => void loadRegistry()} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Refresh</button>
+        <button onClick={() => { setLoading(true); setError(''); void loadRegistry() }} disabled={loading} className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 px-4 py-2.5 text-sm text-zinc-300 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={15} className={loading ? 'animate-spin' : ''}/>Refresh</button>
       </div>
       <div className="mt-7 grid gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-white/10 bg-[#11111b] p-5"><p className="text-xs text-zinc-500">Registered datasets</p><p className="mt-2 text-3xl font-bold">{total}</p></div>
