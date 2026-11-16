@@ -103,7 +103,7 @@ def _post_json(url: str, api_key: str, payload: dict) -> dict:
         return result
     except (TimeoutError, socket.timeout) as exc:
         raise ValueError("The provider connection timed out.") from exc
-    except OSError as exc:
+    except (OSError, http.client.HTTPException) as exc:
         raise ValueError("Could not connect to the provider endpoint.") from exc
     finally:
         connection.close()
