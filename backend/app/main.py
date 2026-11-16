@@ -93,7 +93,7 @@ def get_allowed_origins() -> list[str]:
     for origin in origins:
         parsed = urlsplit(origin)
         if (
-            origin == "*"
+            "*" in origin
             or parsed.scheme not in {"http", "https"}
             or not parsed.netloc
             or parsed.path
