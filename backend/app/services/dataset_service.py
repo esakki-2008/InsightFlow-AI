@@ -1,6 +1,7 @@
 
 from io import BytesIO
 from pathlib import Path
+import zipfile
 
 import pandas as pd
 
@@ -8,8 +9,34 @@ import pandas as pd
 MAX_FILE_SIZE = 10 * 1024 * 1024  # 10 MB
 MAX_ROWS = 100_000
 MAX_COLUMNS = 100
+MAX_XLSX_UNCOMPRESSED_SIZE = 100 * 1024 * 1024
+MAX_XLSX_ARCHIVE_FILES = 1_000
+MAX_XLSX_COMPRESSION_RATIO = 500
 
 ALLOWED_EXTENSIONS = {".csv", ".xlsx", ".xls"}
+
+
+def _validate_xlsx_archive(content: bytes) -> None:
+    """Validate XLSX ZIP structure and limit decompression resource use."""
+    try:
+        with zipfile.ZipFile(BytesIO(content)) as archive:
+            members = archive.infolist()
+            names = {member.filename for member in members}
+            if "[Content_Types].xml" not in names or "xl/workbook.xml" not in names:
+                raise ValueError("The XLSX file is missing required workbook components.")
+            if len(members) > MAX_XLSX_ARCHIVE_FILES:
+                raise ValueError("The XLSX file contains too many internal components.")
+            expanded_size = sum(member.file_size for member in members)
+            if expanded_size > MAX_XLSX_UNCOMPRESSED_SIZE:
+                raise ValueError("The XLSX file expands beyond the allowed 100 MB limit.")
+            if expanded_size > 1_000_000 and expanded_size / max(len(content), 1) > MAX_XLSX_COMPRESSION_RATIO:
+                raise ValueError("The XLSX file has an unsafe compression ratio.")
+            if any(member.flag_bits & 0x1 for member in members):
+                raise ValueError("Encrypted XLSX files are not supported.")
+            if archive.testzip() is not None:
+                raise ValueError("The XLSX file is corrupted and cannot be opened safely.")
+    except zipfile.BadZipFile as exc:
+        raise ValueError("The XLSX file is not a valid ZIP-based workbook.") from exc
 
 
 def inspect_dataset(filename: str, content: bytes) -> dict:
@@ -43,6 +70,7 @@ def inspect_dataset(filename: str, content: bytes) -> dict:
             if not content.startswith(b"PK"):
                 raise ValueError("The XLSX file does not have a valid file signature.")
 
+            _validate_xlsx_archive(content)
             dataframe = pd.read_excel(
                 file_buffer,
                 engine="openpyxl",
