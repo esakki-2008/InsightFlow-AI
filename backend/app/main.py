@@ -44,6 +44,21 @@ app = FastAPI(
     version="0.1.0",
 )
 
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Attach baseline browser security headers to every API response."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault(
+        "Permissions-Policy",
+        "camera=(), microphone=(), geolocation=()",
+    )
+    return response
+
+
 @app.on_event("startup")
 def initialize_database():
     """Apply pending database schema migrations before serving requests."""
