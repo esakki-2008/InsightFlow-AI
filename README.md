@@ -232,6 +232,24 @@ Enter the OpenCode Console API key as the provider API key and the model ID show
 
 OpenCode documents that free-tier chat models are only available from within OpenCode; external clients need paid models or Go. Some model families use different native APIs, but the Console can translate text models between its supported API families. The OpenAI Chat Completions endpoint above is the compatible route used by InsightFlow AI.
 
+## Optional live provider smoke tests
+
+The normal backend test suite uses mocked provider responses and does not require real API keys. To verify an actual provider account, an opt-in smoke-test module is available:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+$env:INSIGHTFLOW_LIVE_PROVIDER_TESTS = "1"
+# Set only the variables for the provider you want to test in this local shell:
+# INSIGHTFLOW_LIVE_OPENAI_API_KEY, INSIGHTFLOW_LIVE_OPENAI_BASE_URL, INSIGHTFLOW_LIVE_OPENAI_MODEL
+# INSIGHTFLOW_LIVE_GEMINI_API_KEY, INSIGHTFLOW_LIVE_GEMINI_MODEL
+# INSIGHTFLOW_LIVE_ANTHROPIC_API_KEY, INSIGHTFLOW_LIVE_ANTHROPIC_MODEL
+python -m pytest backend\tests\test_live_provider_smoke.py -q
+```
+
+For OpenAI-compatible providers, the base URL is the provider API base (the test appends `/chat/completions` unless the full endpoint is already supplied). Gemini and Anthropic use their default official API base URLs unless the corresponding `*_BASE_URL` variable is set. Optional OpenAI-compatible custom headers can be supplied as JSON in `INSIGHTFLOW_LIVE_PROVIDER_HEADERS`.
+
+These tests are skipped by default and make real billable or quota-consuming requests when enabled. Configure secrets only in your own local environment; never commit them, paste them into issues, or share terminal output containing them. Run one provider test at a time if you want to limit usage.
+
 ## Security considerations
 
 The project includes:
