@@ -19,7 +19,6 @@ import {
   BarChart3,
   BrainCircuit,
   CheckCircle2,
-  ChevronDown,
   Database,
   Download,
   FileSpreadsheet,
