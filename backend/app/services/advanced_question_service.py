@@ -7,6 +7,7 @@ import pandas as pd
 
 from app.services.llm_provider_service import DEFAULT_NVIDIA_MODEL
 from app.services.openai_compatible_service import _post_json
+from app.services.native_provider_service import native_provider_chat
 
 
 ALLOWED_OPERATIONS = {
