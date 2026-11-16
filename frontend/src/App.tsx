@@ -450,7 +450,7 @@ function App() {
     {
       label: 'Datasets Analyzed',
       value: String(recentDatasets.length),
-      change: recentDatasets.length ? 'Saved in this browser' : 'Upload a dataset to begin',
+      change: recentDatasets.length ? 'Recent file summaries in this browser' : 'Upload a dataset to begin',
       icon: Database,
     },
     {
@@ -774,8 +774,7 @@ function App() {
               )}
 
               <p className="mt-4 text-[11px] leading-relaxed text-zinc-600">
-                Your selected file is sent to your local FastAPI backend for
-                inspection. Files are not permanently stored yet.
+                Your selected file is sent to your local FastAPI backend for inspection. Dataset metadata is saved in the local database; source files and raw rows are not stored.
               </p>
             </div>
 
@@ -806,7 +805,7 @@ function App() {
                     <div className="mb-2 flex justify-between text-xs"><span className="text-zinc-400">Data completeness</span><span className="font-semibold text-emerald-400">{dataCompleteness}%</span></div>
                     <div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${dataCompleteness}%` }} /></div>
                   </div>
-                  <p className="text-[11px] text-zinc-600">Session activity only. Dataset history and ML model totals will be connected after persistent storage is implemented.</p>
+                  <p className="text-[11px] text-zinc-600">Dataset and analysis metadata are saved in your local database. Uploaded source files and raw rows are not stored. ML model totals are loaded from the backend.</p>
                 </div>
               ) : (
                 <div className="mt-8 flex min-h-44 flex-col items-center justify-center rounded-xl border border-white/5 bg-white/[0.015] text-center">
