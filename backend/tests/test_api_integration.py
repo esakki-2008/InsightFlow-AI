@@ -1,24 +1,5 @@
-import asyncio
-
-import httpx
-
-from app.main import app
-
-
-def request(method: str, path: str, **kwargs):
-    async def send():
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(
-            transport=transport,
-            base_url="http://testserver",
-        ) as client:
-            return await client.request(method, path, **kwargs)
-
-    return asyncio.run(send())
-
-
-def test_health_endpoint_returns_healthy_status_and_security_headers():
-    response = request("GET", "/api/v1/health")
+def test_health_endpoint_returns_healthy_status_and_security_headers(api_client):
+    response = api_client("GET", "/api/v1/health")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -34,16 +15,16 @@ def test_health_endpoint_returns_healthy_status_and_security_headers():
     )
 
 
-def test_root_endpoint_returns_running_status():
-    response = request("GET", "/")
+def test_root_endpoint_returns_running_status(api_client):
+    response = api_client("GET", "/")
 
     assert response.status_code == 200
     assert response.json()["status"] == "running"
     assert response.json()["message"] == "Welcome to InsightFlow AI"
 
 
-def test_upload_endpoint_rejects_unsupported_file_type():
-    response = request(
+def test_upload_endpoint_rejects_unsupported_file_type(api_client):
+    response = api_client(
         "POST",
         "/api/v1/datasets/upload",
         files={"file": ("notes.txt", b"name\\nAda\\n", "text/plain")},
@@ -53,3 +34,24 @@ def test_upload_endpoint_rejects_unsupported_file_type():
     assert response.json()["detail"] == (
         "Unsupported file format. Upload CSV, XLSX, or XLS."
     )
+
+
+def test_valid_upload_registers_metadata_in_isolated_database(api_client):
+    response = api_client(
+        "POST",
+        "/api/v1/datasets/upload",
+        files={
+            "file": (
+                "test_students.csv",
+                b"name,score\\nAda,91\\nLinus,88\\n",
+                "text/csv",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["dataset"]
+    assert payload["total_rows"] == 2
+    assert payload["total_columns"] == 2
+    assert payload["filename"] == "test_students.csv"
+    assert payload["registry_id"]
