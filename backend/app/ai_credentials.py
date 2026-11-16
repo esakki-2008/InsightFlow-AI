@@ -15,6 +15,21 @@ from app.services.credential_crypto_service import encrypt_api_key
 router = APIRouter(prefix="/api/v1/ai/credentials", tags=["AI provider credentials"])
 
 
+def _validate_base_url(value: str) -> str:
+    value = value.strip().rstrip("/")
+    parsed = urlsplit(value)
+    if (
+        parsed.scheme not in {"https", "http"}
+        or not parsed.hostname
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError("Enter a valid provider base URL without credentials, query parameters, or fragments.")
+    return value
+
+
 class CredentialCreate(BaseModel):
     display_name: str = Field(min_length=1, max_length=80)
     provider_name: str = Field(min_length=1, max_length=80)
@@ -34,18 +49,7 @@ class CredentialCreate(BaseModel):
     @field_validator("base_url")
     @classmethod
     def validate_base_url_shape(cls, value: str) -> str:
-        value = value.strip().rstrip("/")
-        parsed = urlsplit(value)
-        if (
-            parsed.scheme not in {"https", "http"}
-            or not parsed.hostname
-            or parsed.username
-            or parsed.password
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise ValueError("Enter a valid provider base URL without credentials, query parameters, or fragments.")
-        return value
+        return _validate_base_url(value)
 
     @field_validator("api_key")
     @classmethod
@@ -78,7 +82,7 @@ class CredentialUpdate(BaseModel):
     def validate_optional_base_url(cls, value: str | None) -> str | None:
         if value is None:
             return value
-        return CredentialCreate.validate_base_url_shape(value)
+        return _validate_base_url(value)
 
     @field_validator("api_key")
     @classmethod
