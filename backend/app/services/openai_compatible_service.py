@@ -98,6 +98,10 @@ def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str], cu
             raise ValueError("A custom provider header attempted to override a reserved header.")
         if len(value) > 2048 or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
             raise ValueError("A custom provider header value is invalid.")
+        try:
+            value.encode("latin-1")
+        except UnicodeEncodeError as exc:
+            raise ValueError("A custom provider header value uses unsupported characters.") from exc
         safe_headers[name] = value
 
     connection = _PinnedHTTPSConnection(hostname, port, address)
