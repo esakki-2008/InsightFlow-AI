@@ -43,7 +43,7 @@ def test_valid_upload_registers_metadata_in_isolated_database(api_client):
         files={
             "file": (
                 "test_students.csv",
-                b"name,score\\nAda,91\\nLinus,88\\n",
+                b"name,score" + bytes([10]) + b"Ada,91" + bytes([10]) + b"Linus,88" + bytes([10]),
                 "text/csv",
             )
         },
