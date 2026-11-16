@@ -265,3 +265,120 @@ def test_advanced_dataset_qa_cannot_use_another_users_saved_provider(auth_api_cl
     )
 
     assert response.status_code == 404
+
+
+def test_native_gemini_adapter_uses_native_endpoint_and_api_key_header(monkeypatch):
+    from app.services import native_provider_service as native
+
+    captured = {}
+
+    def fake_post(url, payload, headers):
+        captured.update({"url": url, "payload": payload, "headers": headers})
+        return {"candidates": [{"content": {"parts": [{"text": "Gemini response"}]}}]}
+
+    monkeypatch.setattr(native, "_post_json_with_headers", fake_post)
+    answer = native.native_provider_chat(
+        protocol="native_gemini",
+        api_key="gemini-test-secret",
+        model="gemini-2.5-flash",
+        base_url="https://generativelanguage.googleapis.com",
+        messages=[
+            {"role": "system", "content": "Be concise."},
+            {"role": "user", "content": "Count rows."},
+        ],
+    )
+
+    assert answer == "Gemini response"
+    assert captured["url"] == "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    assert captured["headers"] == {"x-goog-api-key": "gemini-test-secret"}
+    assert captured["payload"]["systemInstruction"]["parts"][0]["text"] == "Be concise."
+    assert captured["payload"]["contents"][0]["role"] == "user"
+
+
+def test_native_anthropic_adapter_uses_messages_api_and_version_header(monkeypatch):
+    from app.services import native_provider_service as native
+
+    captured = {}
+
+    def fake_post(url, payload, headers):
+        captured.update({"url": url, "payload": payload, "headers": headers})
+        return {"content": [{"type": "text", "text": "Claude response"}]}
+
+    monkeypatch.setattr(native, "_post_json_with_headers", fake_post)
+    answer = native.native_provider_chat(
+        protocol="native_anthropic",
+        api_key="anthropic-test-secret",
+        model="claude-sonnet-4-5",
+        base_url="https://api.anthropic.com",
+        messages=[
+            {"role": "system", "content": "Be concise."},
+            {"role": "user", "content": "Count rows."},
+        ],
+    )
+
+    assert answer == "Claude response"
+    assert captured["url"] == "https://api.anthropic.com/v1/messages"
+    assert captured["headers"] == {
+        "x-api-key": "anthropic-test-secret",
+        "anthropic-version": "2023-06-01",
+    }
+    assert captured["payload"]["system"] == "Be concise."
+    assert captured["payload"]["messages"] == [{"role": "user", "content": "Count rows."}]
+
+
+def test_native_provider_credential_connection_test_dispatches_by_protocol(auth_api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_CREDENTIAL_ENCRYPTION_KEY", Fernet.generate_key().decode("ascii"))
+    from app import ai_credentials
+
+    calls = {}
+
+    def fake_native_test(**kwargs):
+        calls.update(kwargs)
+        return {
+            "provider": kwargs["provider_name"],
+            "model": kwargs["model"],
+            "connected": True,
+            "message": "Native provider connection successful.",
+        }
+
+    monkeypatch.setattr(ai_credentials, "test_native_provider_connection", fake_native_test)
+    created = auth_api_client(
+        "POST",
+        "/api/v1/ai/credentials",
+        json=_payload(
+            provider_name="Google Gemini",
+            protocol="native_gemini",
+            base_url="https://generativelanguage.googleapis.com",
+            model_id="gemini-2.5-flash",
+        ),
+    )
+    assert created.status_code == 201
+    assert created.json()["credential"]["protocol"] == "native_gemini"
+
+    tested = auth_api_client("POST", f"/api/v1/ai/credentials/{created.json()['credential']['id']}/test")
+    assert tested.status_code == 200
+    assert tested.json()["connected"] is True
+    assert calls["protocol"] == "native_gemini"
+    assert calls["api_key"] == "test-provider-secret-1234"
+
+
+def test_advanced_question_service_routes_native_protocol_to_native_adapter(monkeypatch):
+    from app.services import advanced_question_service as advanced
+
+    calls = {}
+
+    def fake_native(**kwargs):
+        calls.update(kwargs)
+        return "native response"
+
+    monkeypatch.setattr(advanced, "native_provider_chat", fake_native)
+    answer = advanced._provider_chat(
+        api_key="native-secret",
+        model="gemini-2.5-flash",
+        messages=[{"role": "user", "content": "hello"}],
+        base_url="https://generativelanguage.googleapis.com",
+        protocol="native_gemini",
+    )
+    assert answer == "native response"
+    assert calls["protocol"] == "native_gemini"
+    assert calls["api_key"] == "native-secret"
