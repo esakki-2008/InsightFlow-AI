@@ -219,7 +219,7 @@ The optional Advanced AI question workflow uses the provider selected in the use
 2. The user's question and the computed analysis result (for example, aggregates, counts, or correlations) are sent to generate the explanation.
 3. Dataset rows are processed locally by the application; raw dataset rows are not sent as part of this workflow.
 
-Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. Provider API keys are encrypted at rest on the backend and scoped to the account that saved them. Only masked key metadata is returned to the frontend. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
+Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. Provider API keys are encrypted at rest on the backend and scoped to the account that saved them. Only masked key metadata is returned to the frontend. Optional provider-specific HTTP headers can also be configured as a JSON object in Settings. They are encrypted at rest, never returned by the API, limited to 20 entries and 8,192 characters, and cannot override authentication or transport-critical headers. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
 
 ## Security considerations
 
