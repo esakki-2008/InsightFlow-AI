@@ -743,6 +743,8 @@ async def predict_with_trained_model(
             "prediction": result,
         }
 
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -796,6 +798,8 @@ async def explain_saved_model_prediction(
             "explanation": explanation,
         }
 
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
