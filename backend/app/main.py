@@ -567,6 +567,7 @@ async def ask_dataset_question_advanced_endpoint(
             model=credential.model_id,
             base_url=credential.base_url,
             provider_name=credential.provider_name,
+            protocol=credential.protocol,
         )
         return {
             "message": "Advanced AI dataset question answered successfully",
