@@ -21,7 +21,7 @@
 
 **InsightFlow AI** is a full-stack data analysis platform designed to bring common data-science workflows into one workspace. Import a tabular dataset, inspect its structure, prepare and clean the data, explore patterns, train machine-learning models, ask questions about the results, and export reports.
 
-The application combines a **React + TypeScript** frontend with a **Python FastAPI** backend. It is built for hands-on dataset analysis, with optional NVIDIA-powered natural-language explanations as an additional AI capability.
+The application combines a **React + TypeScript** frontend with a **Python FastAPI** backend. It is built for hands-on dataset analysis, with optional, user-configured AI provider connections for natural-language dataset questions and explanations.
 
 ## Key capabilities
 
@@ -71,7 +71,7 @@ Model evaluation surfaces relevant metrics and visual diagnostics, such as confu
 └────────────────┘
         │
 ┌───────▼───────────────────────────┐
-│ Optional NVIDIA-powered advanced │
+│ Optional saved AI provider-powered advanced │
 │ question planning and explanation│
 └──────────────────────────────────┘
 ```
@@ -211,15 +211,15 @@ For deployment, set `VITE_API_URL` to the backend's HTTPS origin and configure `
 
 InsightFlow AI processes uploaded dataset content for the requested analysis. The dataset registry and analysis-history features store metadata and analysis summaries rather than the uploaded raw dataset rows. ML model artifacts are saved locally by the backend and are excluded from Git; they may not survive an ephemeral hosting environment or redeployment.
 
-### Optional NVIDIA-powered Advanced AI
+### Saved AI provider connections (optional)
 
-The optional Advanced AI question workflow uses an external NVIDIA service for parts of question planning and explanation:
+The optional Advanced AI question workflow uses the provider selected in the user's authenticated Settings workspace. Supported protocols are OpenAI-compatible chat completions, the native Google Gemini API, and the native Anthropic Messages API:
 
 1. Dataset column names and inferred data types, together with the user's question, are sent for query planning.
 2. The user's question and the computed analysis result (for example, aggregates, counts, or correlations) are sent to generate the explanation.
 3. Dataset rows are processed locally by the application; raw dataset rows are not sent as part of this workflow.
 
-Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
+Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. Provider API keys are encrypted at rest on the backend and scoped to the account that saved them. Only masked key metadata is returned to the frontend. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
 
 ## Security considerations
 
