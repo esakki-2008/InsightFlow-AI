@@ -1,10 +1,13 @@
 """Email/password authentication and bearer-token verification."""
 import os
 import re
+import threading
+import time
+from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pwdlib import PasswordHash
@@ -20,6 +23,44 @@ bearer_scheme = HTTPBearer(auto_error=False)
 JWT_ALGORITHM = "HS256"
 JWT_ISSUER = "insightflow-ai"
 ACCESS_TOKEN_MINUTES = 30
+
+# Per-process sliding-window limits. For multi-worker/multi-instance deployments,
+# move this state to a shared store such as Redis.
+AUTH_RATE_LIMITS = {
+    "login": (5, 15 * 60),
+    "register": (3, 60 * 60),
+}
+_rate_limit_events: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+_rate_limit_lock = threading.Lock()
+
+
+def reset_auth_rate_limits() -> None:
+    """Clear in-memory counters; used by isolated tests."""
+    with _rate_limit_lock:
+        _rate_limit_events.clear()
+
+
+def _enforce_auth_rate_limit(request: Request, action: str) -> None:
+    limit, window_seconds = AUTH_RATE_LIMITS[action]
+    client_ip = request.client.host if request.client else "unknown"
+    key = (action, client_ip)
+    now = time.monotonic()
+
+    with _rate_limit_lock:
+        events = _rate_limit_events[key]
+        cutoff = now - window_seconds
+        while events and events[0] <= cutoff:
+            events.popleft()
+
+        if len(events) >= limit:
+            retry_after = max(1, int(window_seconds - (now - events[0]) + 0.999))
+            raise HTTPException(
+                status_code=429,
+                detail="Too many authentication attempts. Please try again later.",
+                headers={"Retry-After": str(retry_after)},
+            )
+
+        events.append(now)
 
 
 class AuthCredentials(BaseModel):
@@ -88,7 +129,8 @@ def get_current_user(
 
 
 @router.post("/register", status_code=201)
-def register(credentials: AuthCredentials, db: Session = Depends(get_db)):
+def register(credentials: AuthCredentials, request: Request, db: Session = Depends(get_db)):
+    _enforce_auth_rate_limit(request, "register")
     _jwt_secret()
     existing = db.query(User).filter(User.email == credentials.email).first()
     if existing:
@@ -113,7 +155,8 @@ def register(credentials: AuthCredentials, db: Session = Depends(get_db)):
 
 
 @router.post("/login")
-def login(credentials: AuthCredentials, db: Session = Depends(get_db)):
+def login(credentials: AuthCredentials, request: Request, db: Session = Depends(get_db)):
+    _enforce_auth_rate_limit(request, "login")
     _jwt_secret()
     user = db.query(User).filter(User.email == credentials.email).first()
     if user is None or not user.is_active or not password_hasher.verify(credentials.password, user.password_hash):
