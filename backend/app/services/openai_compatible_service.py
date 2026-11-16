@@ -8,6 +8,7 @@ from __future__ import annotations
 import http.client
 import ipaddress
 import json
+import re
 import socket
 import ssl
 from urllib.parse import urlsplit
@@ -57,7 +58,7 @@ def _resolve_public_address(hostname: str) -> str:
     return addresses[0]
 
 
-def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str]) -> dict:
+def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str], custom_headers: dict[str, str] | None = None) -> dict:
     """POST JSON through the pinned public-IP HTTPS transport using explicit safe headers."""
     parsed = urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname:
@@ -81,6 +82,22 @@ def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str]) ->
             raise ValueError("A provider adapter attempted to override a reserved HTTP header.")
         if any(ch in name + value for ch in "\r\n"):
             raise ValueError("Provider request headers contain invalid characters.")
+        safe_headers[name] = value
+
+    for name, value in (custom_headers or {}).items():
+        if not isinstance(name, str) or not isinstance(value, str):
+            raise ValueError("Custom provider headers must contain text names and values.")
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]{1,64}", name):
+            raise ValueError("A custom provider header name is invalid.")
+        if name.lower() in {
+            "authorization", "proxy-authorization", "host", "content-length",
+            "connection", "keep-alive", "proxy-authenticate", "te", "trailer",
+            "transfer-encoding", "upgrade", "content-type", "x-api-key",
+            "api-key", "x-goog-api-key", "anthropic-version",
+        }:
+            raise ValueError("A custom provider header attempted to override a reserved header.")
+        if len(value) > 2048 or any(ord(ch) < 32 or ord(ch) == 127 for ch in value):
+            raise ValueError("A custom provider header value is invalid.")
         safe_headers[name] = value
 
     connection = _PinnedHTTPSConnection(hostname, port, address)
@@ -114,8 +131,10 @@ def _post_json_with_headers(url: str, payload: dict, headers: dict[str, str]) ->
         connection.close()
 
 
-def _post_json(url: str, api_key: str, payload: dict) -> dict:
-    return _post_json_with_headers(url, payload, {"Authorization": f"Bearer {api_key}"})
+def _post_json(url: str, api_key: str, payload: dict, custom_headers: dict[str, str] | None = None) -> dict:
+    return _post_json_with_headers(
+        url, payload, {"Authorization": f"Bearer {api_key}"}, custom_headers=custom_headers
+    )
 
 
 def test_openai_compatible_connection(
@@ -123,6 +142,7 @@ def test_openai_compatible_connection(
     base_url: str,
     model: str,
     provider_name: str = "OpenAI-compatible provider",
+    custom_headers: dict[str, str] | None = None,
 ) -> dict:
     """Send a minimal chat-completions request without exposing or persisting the key."""
     key = (api_key or "").strip()
@@ -155,7 +175,7 @@ def test_openai_compatible_connection(
         "temperature": 0,
         "stream": False,
     }
-    result = _post_json(completion_url, key, payload)
+    result = _post_json(completion_url, key, payload, custom_headers) if custom_headers else _post_json(completion_url, key, payload)
     choices = result.get("choices") or []
     if not choices or not isinstance(choices[0], dict):
         raise ValueError("The provider returned no completion choices.")
