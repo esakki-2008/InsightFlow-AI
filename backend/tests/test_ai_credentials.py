@@ -62,6 +62,7 @@ def test_credentials_are_isolated_between_users(auth_api_client, api_client, mon
 
 
 def test_credentials_require_authentication_and_encryption_configuration(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
     unauthenticated = api_client("GET", "/api/v1/ai/credentials")
     assert unauthenticated.status_code == 401
 
