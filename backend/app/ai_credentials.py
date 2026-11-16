@@ -36,10 +36,14 @@ def _validate_custom_headers(value: dict[str, str] | None) -> dict[str, str]:
     if not isinstance(value, dict) or len(value) > 20:
         raise ValueError("Provide no more than 20 custom HTTP headers.")
     cleaned: dict[str, str] = {}
+    seen_names: set[str] = set()
     total_size = 0
     for name, header_value in value.items():
         if not isinstance(name, str) or not _HEADER_NAME.fullmatch(name):
             raise ValueError("A custom HTTP header name is invalid.")
+        if name.lower() in seen_names:
+            raise ValueError("Custom HTTP header names must be unique regardless of letter case.")
+        seen_names.add(name.lower())
         if name.lower() in _RESERVED_CUSTOM_HEADERS:
             raise ValueError(f"The custom header '{name}' is reserved for secure provider communication.")
         if not isinstance(header_value, str) or len(header_value) > 2048:
