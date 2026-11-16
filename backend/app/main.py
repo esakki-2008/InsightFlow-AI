@@ -1037,7 +1037,7 @@ def get_analysis_history(history_id: str, db: Session = Depends(get_db), current
 @app.delete("/api/v1/history/{history_id}", dependencies=[Depends(get_current_user)])
 def delete_analysis_history(history_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete one saved analysis record."""
-    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
+    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id, AnalysisHistory.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Analysis history record not found.")
     db.delete(record)
@@ -1079,7 +1079,7 @@ def get_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), cu
 
 @app.delete("/api/v1/datasets/registry/{dataset_id}", dependencies=[Depends(get_current_user)])
 def delete_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
+    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id, models.DatasetRecord.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Dataset registry record not found.")
     db.delete(record)
