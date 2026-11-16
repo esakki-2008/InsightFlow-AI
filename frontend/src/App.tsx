@@ -296,7 +296,7 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
       const formData = new FormData()
       formData.append('file', selectedFile)
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/api/v1/datasets/clean/preview`,
         {
           method: 'POST',
@@ -319,7 +319,7 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
       // Save compact cleaning metadata only; never persist uploaded rows.
       try {
         const summary = previewResult.cleaning_preview.summary
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -380,7 +380,7 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
       formData.append('file', selectedFile)
       formData.append('confirm', 'true')
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_URL}/api/v1/datasets/clean/apply`,
         {
           method: 'POST',
