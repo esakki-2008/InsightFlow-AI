@@ -202,7 +202,7 @@ The GitHub Actions workflow runs the backend test suite and frontend production 
 |---|---|---|
 | `DATABASE_URL` | Backend | SQLAlchemy database connection string. SQLite is used when no external database is configured. |
 | `INSIGHTFLOW_JWT_SECRET` | Backend | Random secret of at least 32 characters used to sign access tokens. Keep it private and stable across backend restarts. |
-| `BACKEND_CORS_ORIGINS` | Backend | Comma-separated list of allowed frontend origins. |
+| `BACKEND_CORS_ORIGINS` | Backend | Comma-separated list of exact allowed frontend origins. Remote origins must use HTTPS. |\n| `REDIS_URL` | Backend | Shared Redis connection for authentication rate limiting. Required when `INSIGHTFLOW_ENV=production`. |\n| `INSIGHTFLOW_ENV` | Backend | Set to `production` in production deployments; this requires shared Redis rate limiting. |
 | `VITE_API_URL` | Frontend | Backend API base URL used by the Vite application. |
 
 For deployment, set `VITE_API_URL` to the backend's HTTPS origin and configure `BACKEND_CORS_ORIGINS` with the exact frontend origin(s). Store credentials and API keys in your hosting provider's environment/secrets configuration. **Never commit secrets to the repository or expose provider keys in frontend code.**
@@ -234,7 +234,7 @@ The project includes:
 - Database schema migrations.
 - Automated backend tests and frontend build checks.
 
-Authentication is being introduced in phases. Until backend authorization is applied to every private API route, records and model artifacts are owner-scoped, and cross-account isolation tests pass, do not expose the application publicly or treat it as a secure multi-user deployment. Rate limiting, HTTPS, secret management, database backups, logging, monitoring, and production-specific upload/storage controls are also required.
+Authentication is being introduced in phases. Until backend authorization is applied to every private API route, records and model artifacts are owner-scoped, and cross-account isolation tests pass, do not expose the application publicly or treat it as a secure multi-user deployment. HTTPS, secret management, database backups, logging, monitoring, persistent artifact storage, and production-specific upload/storage controls are also required. Production authentication rate limiting requires a reachable Redis service configured through `REDIS_URL` and `INSIGHTFLOW_ENV=production`.
 
 ## Repository structure
 
