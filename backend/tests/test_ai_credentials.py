@@ -613,3 +613,58 @@ def test_opencode_go_session_header_is_forwarded(monkeypatch):
     )
     assert captured["url"] == "https://opencode.ai/inference/go/openai/v1/chat/completions"
     assert captured["custom_headers"] == {"x-opencode-session": "ses_example"}
+
+
+def test_provider_transport_rejects_case_insensitive_duplicate_transport_headers(monkeypatch):
+    from app.services import openai_compatible_service as provider
+
+    monkeypatch.setattr(provider, "_resolve_public_address", lambda hostname: "93.184.216.34")
+    try:
+        provider._post_json_with_headers(
+            "https://provider.example/v1/test",
+            {},
+            {"Authorization": "Bearer valid"},
+            custom_headers={"accept": "text/plain"},
+        )
+    except ValueError as exc:
+        assert "cannot duplicate" in str(exc)
+    else:
+        raise AssertionError("Custom headers must not duplicate transport headers")
+
+
+def test_provider_transport_does_not_expose_provider_error_body(monkeypatch):
+    from app.services import openai_compatible_service as provider
+
+    class FakeResponse:
+        status = 500
+
+        def read(self, _limit):
+            return b'{"error":"private-provider-diagnostic-secret"}'
+
+    class FakeConnection:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def request(self, *_args, **_kwargs):
+            pass
+
+        def getresponse(self):
+            return FakeResponse()
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(provider, "_resolve_public_address", lambda hostname: "93.184.216.34")
+    monkeypatch.setattr(provider, "_PinnedHTTPSConnection", FakeConnection)
+    try:
+        provider._post_json_with_headers(
+            "https://provider.example/v1/test",
+            {},
+            {"Authorization": "Bearer test-secret"},
+        )
+    except ValueError as exc:
+        assert "HTTP 500" in str(exc)
+        assert "private-provider-diagnostic-secret" not in str(exc)
+        assert "test-secret" not in str(exc)
+    else:
+        raise AssertionError("Provider HTTP errors must not expose response bodies")
