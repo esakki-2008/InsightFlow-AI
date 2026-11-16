@@ -177,7 +177,7 @@ From the repository root, with the backend virtual environment activated:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\backend"
-pytest backend\tests -v
+pytest backend\tests -v --ignore=backend\tests\test_live_provider_smoke.py
 ```
 
 ### Frontend lint and production build
@@ -263,7 +263,7 @@ The project includes:
 - Database schema migrations.
 - Automated backend tests and frontend build checks.
 
-Authentication is being introduced in phases. Until backend authorization is applied to every private API route, records and model artifacts are owner-scoped, and cross-account isolation tests pass, do not expose the application publicly or treat it as a secure multi-user deployment. HTTPS, secret management, database backups, logging, monitoring, persistent artifact storage, and production-specific upload/storage controls are also required. Production authentication rate limiting requires a reachable Redis service configured through `REDIS_URL` and `INSIGHTFLOW_ENV=production`.
+Private dataset, history, registry, machine-learning, and AI-provider operations require JWT authentication. Account passwords are hashed with Argon2; access tokens are short-lived; saved provider credentials and custom headers are encrypted at rest; and user-owned records and model artifacts are scoped to the authenticated account. Login and registration are rate-limited. Production mode fails closed when shared Redis rate limiting is missing or unavailable. The root and health endpoints are intentionally public. These controls are application-level safeguards, not a substitute for an independent security assessment. Before public production use, configure HTTPS, strong stable secrets, exact CORS origins, managed PostgreSQL, reachable Redis, database backups, monitoring and alerting, persistent storage for model artifacts, and hosting-level request/body limits. Verify migrations and recovery procedures against the actual production services; production deployment has not been validated by the repository CI workflow.
 
 ## Repository structure
 
