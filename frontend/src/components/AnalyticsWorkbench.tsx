@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, BarChart3, Database, FileSpreadsheet, Loader2, Sparkles, UploadCloud, ShieldCheck, AlertCircle, Printer, FileDown } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
 type CategoryItem = { value: string; count: number }
 interface Exploration {
@@ -37,7 +37,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
     try {
       const form = new FormData()
       form.append('file', file)
-      const response = await fetch(`${API_URL}/api/v1/datasets/export/analytics.xlsx`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/export/analytics.xlsx`, { method: 'POST', body: form })
       if (!response.ok) {
         let message = 'Excel report could not be exported.'
         try { const result = await response.json(); message = result.detail || message } catch { /* keep fallback */ }
@@ -68,7 +68,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
       form.append('page', '1')
       form.append('page_size', '25')
       form.append('search', '')
-      const response = await fetch(`${API_URL}/api/v1/datasets/explore`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/explore`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Analytics could not be generated.')
       const payload = result as ExploreResponse
@@ -77,7 +77,7 @@ export default function AnalyticsWorkbench({ onBack }: { onBack: () => void }) {
 
       try {
         const overview = payload.exploration.overview
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
