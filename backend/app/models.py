@@ -78,3 +78,26 @@ class MLModelRecord(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc), index=True
     )
+
+
+class AIProviderCredential(Base):
+    """Encrypted provider credential owned by exactly one account."""
+
+    __tablename__ = "ai_provider_credentials"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    display_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    provider_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    protocol: Mapped[str] = mapped_column(String(32), nullable=False, default="openai_compatible")
+    base_url: Mapped[str] = mapped_column(String(500), nullable=False)
+    model_id: Mapped[str] = mapped_column(String(200), nullable=False)
+    encrypted_api_key: Mapped[str] = mapped_column(Text, nullable=False)
+    key_last_four: Mapped[str] = mapped_column(String(4), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc)
+    )
