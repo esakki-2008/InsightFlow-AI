@@ -55,7 +55,7 @@ def test_user_cannot_read_or_delete_another_users_dataset_registry_item(auth_api
     uploaded = auth_api_client(
         "POST",
         "/api/v1/datasets/upload",
-        files={"file": ("owner-private.csv", b"age,score\\n20,90\\n21,80\\n", "text/csv")},
+        files={"file": ("owner-private.csv", b"age,score\n20,90\n21,80\n", "text/csv")},
     )
     assert uploaded.status_code == 200
     dataset_id = uploaded.json()["dataset"]["registry_id"]
