@@ -29,3 +29,4 @@ websockets==17.4
 scikit-learn>=1.6,<2.0
 joblib>=1.4,<2.0
 alembic>=1.14,<2.0
+pytest>=8.0,<10.0
