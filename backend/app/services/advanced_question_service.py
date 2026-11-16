@@ -30,6 +30,7 @@ def _provider_chat(
     base_url: str,
     max_tokens: int = 700,
     protocol: str = "openai_compatible",
+    custom_headers: dict[str, str] | None = None,
 ) -> str:
     """Call the selected provider through its protocol adapter and pinned HTTPS transport."""
     if protocol in {"native_gemini", "native_anthropic"}:
@@ -40,6 +41,7 @@ def _provider_chat(
             messages=messages,
             base_url=base_url,
             max_tokens=max_tokens,
+            custom_headers=custom_headers,
         )
     if protocol != "openai_compatible":
         raise ValueError("The selected AI provider protocol is not supported.")
@@ -54,18 +56,16 @@ def _provider_chat(
     else:
         completion_url = endpoint + "/chat/completions"
 
-    data = _post_json(
-        completion_url,
-        api_key,
-        {
+    request_payload = {
             "model": model,
             "messages": messages,
             "temperature": 0.1,
             "top_p": 0.9,
             "max_tokens": max_tokens,
             "stream": False,
-        },
-    )
+        }
+    data = (_post_json(completion_url, api_key, request_payload, custom_headers)
+            if custom_headers else _post_json(completion_url, api_key, request_payload))
     choices = data.get("choices") or []
     if not choices or not isinstance(choices[0], dict):
         raise ValueError("The selected provider returned no completion choices.")
@@ -263,6 +263,7 @@ def answer_advanced_dataset_question(
     base_url: str = "https://integrate.api.nvidia.com/v1",
     provider_name: str = "NVIDIA",
     protocol: str = "openai_compatible",
+    custom_headers: dict[str, str] | None = None,
 ) -> dict:
     """Use a selected OpenAI-compatible LLM to plan and explain validated local Pandas analysis."""
     key = (api_key or "").strip()
@@ -317,6 +318,7 @@ def answer_advanced_dataset_question(
             base_url=base_url,
             max_tokens=500,
             protocol=protocol,
+            custom_headers=custom_headers,
         )
         plan = _extract_json(plan_text)
     result = _validate_and_execute(frame, plan)
