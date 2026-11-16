@@ -136,7 +136,7 @@ def _enforce_auth_rate_limit(request: Request, action: str) -> None:
             return
         except HTTPException:
             raise
-        except redis.RedisError as exc:
+        except (redis.RedisError, ValueError) as exc:
             # Fail closed when a shared limiter was explicitly configured.
             raise HTTPException(
                 status_code=503,
