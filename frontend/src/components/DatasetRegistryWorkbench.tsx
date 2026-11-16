@@ -40,7 +40,10 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
     }
   }, [])
 
-  useEffect(() => { void Promise.resolve().then(loadRegistry) }, [loadRegistry])
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => { void loadRegistry() }, 0)
+    return () => window.clearTimeout(timeoutId)
+  }, [loadRegistry])
 
   const deleteRecord = async (id: string) => {
     if (!window.confirm('Delete this dataset metadata record? The original file is not stored here and will not be affected.')) return
