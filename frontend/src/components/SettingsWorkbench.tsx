@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { ArrowLeft, Bot, CheckCircle2, CircleAlert, KeyRound, LoaderCircle, Plus, ShieldCheck, Trash2, UserRound, Workflow, X } from 'lucide-react'
 import { API_URL, apiFetch, type AuthUser } from '../config/api'
 
@@ -103,7 +103,7 @@ export default function SettingsWorkbench({ user, onBack }: SettingsWorkbenchPro
     setForm(emptyForm)
   }
 
-  async function saveCredential(event: React.FormEvent<HTMLFormElement>) {
+  async function saveCredential(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSaving(true)
     setNotice(null)
