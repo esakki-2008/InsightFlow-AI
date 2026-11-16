@@ -55,6 +55,7 @@ def native_provider_chat(
     messages: list[dict],
     base_url: str,
     max_tokens: int = 700,
+    custom_headers: dict[str, str] | None = None,
 ) -> str:
     """Generate one text completion using the selected provider's native REST contract."""
     key, selected_model, endpoint = _validate_inputs(api_key, model, base_url)
@@ -79,7 +80,7 @@ def native_provider_chat(
         if system_text:
             payload["system_instruction"] = system_text
         url = f"{endpoint}/v1beta/interactions"
-        result = _post_json_with_headers(url, payload, {"x-goog-api-key": key})
+        result = _post_json_with_headers(url, payload, {"x-goog-api-key": key}, custom_headers=custom_headers) if custom_headers else _post_json_with_headers(url, payload, {"x-goog-api-key": key})
         steps = result.get("steps") or []
         text_parts = []
         for step in steps:
@@ -98,10 +99,10 @@ def native_provider_chat(
         if system_text:
             payload["system"] = system_text
         url = f"{endpoint}/v1/messages"
-        result = _post_json_with_headers(
-            url,
-            payload,
-            {"x-api-key": key, "anthropic-version": "2023-06-01"},
+        auth_headers = {"x-api-key": key, "anthropic-version": "2023-06-01"}
+        result = (
+            _post_json_with_headers(url, payload, auth_headers, custom_headers=custom_headers)
+            if custom_headers else _post_json_with_headers(url, payload, auth_headers)
         )
         blocks = result.get("content") or []
         text = "\n".join(block.get("text", "") for block in blocks
@@ -120,6 +121,7 @@ def test_native_provider_connection(
     model: str,
     base_url: str,
     provider_name: str,
+    custom_headers: dict[str, str] | None = None,
 ) -> dict:
     """Verify a native provider key with a minimal prompt without exposing the key."""
     native_provider_chat(
@@ -129,6 +131,7 @@ def test_native_provider_connection(
         base_url=base_url,
         messages=[{"role": "user", "content": "Reply with exactly: OK"}],
         max_tokens=16,
+        custom_headers=custom_headers,
     )
     return {
         "provider": (provider_name or "AI provider")[:80],
