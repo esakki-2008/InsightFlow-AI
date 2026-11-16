@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Database, Eye, FileText, History, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 const PAGE_SIZE = 10
 
 type HistoryItem = {
@@ -37,7 +37,7 @@ export default function HistoryWorkbench({ onBack }: { onBack: () => void }) {
 
   const loadHistory = useCallback(async (nextOffset: number) => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/history?limit=${PAGE_SIZE}&offset=${nextOffset}`)
+      const response = await apiFetch(`${API_URL}/api/v1/history?limit=${PAGE_SIZE}&offset=${nextOffset}`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to load analysis history.')
       const data = result as HistoryResponse
@@ -77,7 +77,7 @@ export default function HistoryWorkbench({ onBack }: { onBack: () => void }) {
     setError('')
     setNotice('')
     try {
-      const response = await fetch(`${API_URL}/api/v1/history/${deletingId}`, { method: 'DELETE' })
+      const response = await apiFetch(`${API_URL}/api/v1/history/${deletingId}`, { method: 'DELETE' })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to delete this history record.')
       if (selected?.id === deletingId) setSelected(null)
@@ -96,7 +96,7 @@ export default function HistoryWorkbench({ onBack }: { onBack: () => void }) {
   const openDetails = async (item: HistoryItem) => {
     setSelected(item)
     try {
-      const response = await fetch(`${API_URL}/api/v1/history/${item.id}`)
+      const response = await apiFetch(`${API_URL}/api/v1/history/${item.id}`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to load record details.')
       if (result.item) setSelected(result.item as HistoryItem)
