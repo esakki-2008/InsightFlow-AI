@@ -10,6 +10,7 @@ from app.services.ml_model_service import save_model_bundle
 
 def train_classification_models(
     prepared: dict,
+    user_id: str,
     random_state: int = 42,
 ) -> dict:
     """Train baseline classifiers and evaluate them on the held-out test set."""
@@ -103,6 +104,7 @@ def train_classification_models(
             ]
 
     model_id = save_model_bundle(
+        user_id=user_id,
         estimators=estimators,
         target_column=prepared["summary"]["target_column"],
         feature_columns=list(X_train.columns.astype(str)),

@@ -12,6 +12,7 @@ ARTIFACT_DIR = Path(__file__).resolve().parents[2] / "artifacts" / "ml_models"
 
 
 def save_model_bundle(
+    user_id: str,
     estimators: dict,
     target_column: str,
     feature_columns: list[str],
@@ -25,8 +26,13 @@ def save_model_bundle(
     except ImportError as exc:
         raise RuntimeError("joblib is required to save trained models.") from exc
 
+    try:
+        owner_id = str(UUID(user_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("Invalid user_id for model storage.") from exc
     model_id = str(uuid4())
-    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    owner_dir = ARTIFACT_DIR / owner_id
+    owner_dir.mkdir(parents=True, exist_ok=True)
     bundle = {
         "model_id": model_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -39,8 +45,8 @@ def save_model_bundle(
         "random_state": int(random_state),
         "estimators": estimators,
     }
-    destination = ARTIFACT_DIR / f"{model_id}.joblib"
-    temporary = ARTIFACT_DIR / f".{model_id}.tmp"
+    destination = owner_dir / f"{model_id}.joblib"
+    temporary = owner_dir / f".{model_id}.tmp"
     try:
         joblib.dump(bundle, temporary)
         temporary.replace(destination)
@@ -50,14 +56,18 @@ def save_model_bundle(
     return model_id
 
 
-def load_model_bundle(model_id: str) -> dict:
+def load_model_bundle(model_id: str, user_id: str) -> dict:
     """Load a previously saved bundle using a strictly validated UUID."""
     try:
         safe_id = str(UUID(model_id))
     except (ValueError, TypeError, AttributeError) as exc:
         raise ValueError("Invalid model_id. Use the model ID returned by training.") from exc
 
-    path = ARTIFACT_DIR / f"{safe_id}.joblib"
+    try:
+        owner_id = str(UUID(user_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("Invalid user_id for model access.") from exc
+    path = ARTIFACT_DIR / owner_id / f"{safe_id}.joblib"
     if not path.is_file():
         raise ValueError("Saved model not found. Train a model before requesting predictions.")
 
@@ -75,13 +85,14 @@ def load_model_bundle(model_id: str) -> dict:
 def predict_with_saved_model(
     dataframe: pd.DataFrame,
     model_id: str,
+    user_id: str,
     model_name: str,
 ) -> dict:
     """Run predictions with a saved estimator and its original feature preparation."""
     if dataframe.empty:
         raise ValueError("The prediction dataset is empty.")
 
-    bundle = load_model_bundle(model_id)
+    bundle = load_model_bundle(model_id, user_id)
     estimators = bundle["estimators"]
     if model_name not in estimators:
         available = ", ".join(sorted(estimators))
@@ -150,16 +161,21 @@ def predict_with_saved_model(
 
 
 
-def list_saved_models() -> dict:
+def list_saved_models(user_id: str) -> dict:
     """List metadata for model bundles persisted in the local artifact directory."""
     try:
         import joblib
     except ImportError as exc:
         raise RuntimeError("joblib is required to list saved models.") from exc
 
+    try:
+        owner_id = str(UUID(user_id))
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise ValueError("Invalid user_id for model listing.") from exc
+    owner_dir = ARTIFACT_DIR / owner_id
     models = []
-    if ARTIFACT_DIR.is_dir():
-        for path in ARTIFACT_DIR.glob("*.joblib"):
+    if owner_dir.is_dir():
+        for path in owner_dir.glob("*.joblib"):
             try:
                 bundle = joblib.load(path)
                 model_id = str(UUID(str(bundle.get("model_id", ""))))
