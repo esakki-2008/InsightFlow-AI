@@ -1,6 +1,10 @@
 # InsightFlow AI
 
 <p align="center">
+  <img src="docs/insightflow-banner.svg" alt="InsightFlow AI — AI-Powered Data Analysis Platform" width="100%" />
+</p>
+
+<p align="center">
   <strong>Turn tabular data into actionable insights.</strong><br />
   An AI-assisted workspace for data exploration, cleaning, visualization, statistical analysis, and machine learning.
 </p>
