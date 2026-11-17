@@ -334,13 +334,13 @@ This project is licensed under the [MIT License](./LICENSE).
 
 ## Application Screenshots
 
-### Screenshot 2026-11-17 174636
-
-![Screenshot 2026-11-17 174636](docs/screenshots/Screenshot%202026-11-17%20174636.png)
-
 ### Screenshot 2026-11-17 174649
 
 ![Screenshot 2026-11-17 174649](docs/screenshots/Screenshot%202026-11-17%20174649.png)
+
+### Screenshot 2026-11-17 174636
+
+![Screenshot 2026-11-17 174636](docs/screenshots/Screenshot%202026-11-17%20174636.png)
 
 ### Screenshot 2026-11-17 174727
 
