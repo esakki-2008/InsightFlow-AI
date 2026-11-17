@@ -398,6 +398,8 @@ This project is licensed under the [MIT License](./LICENSE).
 
 ## Author
 
-**Esakki Raja Salaikumar**
+**Esakki Raja Salaikumar**  
+B.Sc. Information Technology | AI/ML & Cybersecurity
 
-[GitHub Profile](https://github.com/esakki-2008)
+---
+
