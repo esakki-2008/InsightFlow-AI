@@ -70,11 +70,12 @@ def _provider_chat(
     if not choices or not isinstance(choices[0], dict):
         raise ValueError("The selected provider returned no completion choices.")
     message = choices[0].get("message") or {}
+    # Only expose the provider's user-facing message content. Some reasoning
+    # models return a separate reasoning_content field; that field may contain
+    # private chain-of-thought and must never be used as a user-facing fallback.
     text = message.get("content")
     if not isinstance(text, str) or not text.strip():
-        text = message.get("reasoning_content")
-    if not isinstance(text, str) or not text.strip():
-        raise ValueError("The selected provider returned an empty response. Try again.")
+        raise ValueError("The selected provider returned no user-facing answer. Try again.")
     return text.strip()
 
 
