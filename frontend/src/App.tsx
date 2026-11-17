@@ -13,6 +13,7 @@ import DatasetQAWorkbench from './components/DatasetQAWorkbench'
 import HistoryWorkbench from './components/HistoryWorkbench'
 import DatasetRegistryWorkbench from './components/DatasetRegistryWorkbench'
 import ModelRegistryWorkbench from './components/ModelRegistryWorkbench'
+import SettingsWorkbench from './components/SettingsWorkbench'
 import {
   Activity,
   AlertCircle,
@@ -136,8 +137,7 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
     try {
       const saved = localStorage.getItem(storageKey('recent_datasets'))
       if (saved) return JSON.parse(saved) as DatasetInfo[]
-      const latest = localStorage.getItem('insightflow_dashboard_dataset')
-      return latest ? [JSON.parse(latest) as DatasetInfo] : []
+      return []
     } catch {
       return []
     }
@@ -520,6 +520,10 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
     return <ModelRegistryWorkbench onBack={() => setActivePage('Overview')} />
   }
 
+  if (activePage === 'Settings') {
+    return <SettingsWorkbench user={user} onBack={() => setActivePage('Overview')} />
+  }
+
   return (
     <div className="min-h-screen bg-[#09090f] text-zinc-100">
       <aside className="fixed inset-y-0 left-0 z-20 hidden w-64 border-r border-white/5 bg-[#0d0d16] lg:flex lg:flex-col">
@@ -569,10 +573,18 @@ function DashboardApp({ user, onLogout }: DashboardAppProps) {
         </div>
 
         <div className="mt-auto border-t border-white/5 p-4">
-          <div className="flex items-center gap-3 rounded-xl p-3 text-sm text-zinc-400">
+          <button
+            type="button"
+            onClick={() => setActivePage('Settings')}
+            className={`flex w-full items-center gap-3 rounded-xl p-3 text-left text-sm transition ${
+              activePage === 'Settings'
+                ? 'bg-violet-600/15 font-medium text-violet-300'
+                : 'text-zinc-400 hover:bg-white/[0.03] hover:text-zinc-200'
+            }`}
+          >
             <Settings size={18} />
             Settings
-          </div>
+          </button>
           <div className="mt-3 rounded-xl border border-violet-500/15 bg-violet-500/5 p-4">
             <Sparkles className="mb-2 text-violet-400" size={20} />
             <p className="text-sm font-semibold text-white">

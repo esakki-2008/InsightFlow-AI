@@ -30,12 +30,21 @@ def upgrade() -> None:
     for table in ("analysis_history", "dataset_registry", "ml_model_registry"):
         if table not in tables:
             continue
+
         columns = {column["name"] for column in inspect(bind).get_columns(table)}
         if "user_id" not in columns:
-            op.add_column(
-                table,
-                Column("user_id", String(length=36), ForeignKey("users.id"), nullable=True),
-            )
+            # Batch mode uses SQLite's safe table-copy strategy to add a
+            # nullable FK while preserving every pre-existing row.
+            with op.batch_alter_table(table) as batch_op:
+                batch_op.add_column(
+                    Column(
+                        "user_id",
+                        String(length=36),
+                        ForeignKey("users.id", name=f"fk_{table}_user_id_users"),
+                        nullable=True,
+                    )
+                )
+
         indexes = {index["name"] for index in inspect(bind).get_indexes(table)}
         index_name = f"ix_{table}_user_id"
         if index_name not in indexes:

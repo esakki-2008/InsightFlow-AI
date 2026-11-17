@@ -21,7 +21,7 @@
 
 **InsightFlow AI** is a full-stack data analysis platform designed to bring common data-science workflows into one workspace. Import a tabular dataset, inspect its structure, prepare and clean the data, explore patterns, train machine-learning models, ask questions about the results, and export reports.
 
-The application combines a **React + TypeScript** frontend with a **Python FastAPI** backend. It is built for hands-on dataset analysis, with optional NVIDIA-powered natural-language explanations as an additional AI capability.
+The application combines a **React + TypeScript** frontend with a **Python FastAPI** backend. It is built for hands-on dataset analysis, with optional, user-configured AI provider connections for natural-language dataset questions and explanations.
 
 ## Key capabilities
 
@@ -71,7 +71,7 @@ Model evaluation surfaces relevant metrics and visual diagnostics, such as confu
 └────────────────┘
         │
 ┌───────▼───────────────────────────┐
-│ Optional NVIDIA-powered advanced │
+│ Optional saved AI provider-powered advanced │
 │ question planning and explanation│
 └──────────────────────────────────┘
 ```
@@ -177,7 +177,7 @@ From the repository root, with the backend virtual environment activated:
 
 ```powershell
 $env:PYTHONPATH = "$PWD\backend"
-pytest backend\tests -v
+pytest backend\tests -v --ignore=backend\tests\test_live_provider_smoke.py
 ```
 
 ### Frontend lint and production build
@@ -202,7 +202,7 @@ The GitHub Actions workflow runs the backend test suite and frontend production 
 |---|---|---|
 | `DATABASE_URL` | Backend | SQLAlchemy database connection string. SQLite is used when no external database is configured. |
 | `INSIGHTFLOW_JWT_SECRET` | Backend | Random secret of at least 32 characters used to sign access tokens. Keep it private and stable across backend restarts. |
-| `BACKEND_CORS_ORIGINS` | Backend | Comma-separated list of allowed frontend origins. |
+| `BACKEND_CORS_ORIGINS` | Backend | Comma-separated list of exact allowed frontend origins. Remote origins must use HTTPS. |\n| `REDIS_URL` | Backend | Shared Redis connection for authentication rate limiting. Required when `INSIGHTFLOW_ENV=production`. |\n| `INSIGHTFLOW_ENV` | Backend | Set to `production` in production deployments; this requires shared Redis rate limiting. |
 | `VITE_API_URL` | Frontend | Backend API base URL used by the Vite application. |
 
 For deployment, set `VITE_API_URL` to the backend's HTTPS origin and configure `BACKEND_CORS_ORIGINS` with the exact frontend origin(s). Store credentials and API keys in your hosting provider's environment/secrets configuration. **Never commit secrets to the repository or expose provider keys in frontend code.**
@@ -211,15 +211,44 @@ For deployment, set `VITE_API_URL` to the backend's HTTPS origin and configure `
 
 InsightFlow AI processes uploaded dataset content for the requested analysis. The dataset registry and analysis-history features store metadata and analysis summaries rather than the uploaded raw dataset rows. ML model artifacts are saved locally by the backend and are excluded from Git; they may not survive an ephemeral hosting environment or redeployment.
 
-### Optional NVIDIA-powered Advanced AI
+### Saved AI provider connections (optional)
 
-The optional Advanced AI question workflow uses an external NVIDIA service for parts of question planning and explanation:
+The optional Advanced AI question workflow uses the provider selected in the user's authenticated Settings workspace. Supported protocols are OpenAI-compatible chat completions, the native Google Gemini Interactions API (stateless requests with `store=false`), and the native Anthropic Messages API:
 
 1. Dataset column names and inferred data types, together with the user's question, are sent for query planning.
 2. The user's question and the computed analysis result (for example, aggregates, counts, or correlations) are sent to generate the explanation.
 3. Dataset rows are processed locally by the application; raw dataset rows are not sent as part of this workflow.
 
-Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
+Do not use this feature with confidential, regulated, or personal data unless you have reviewed the provider's terms and are comfortable sharing the information described above. Provider API keys are encrypted at rest on the backend and scoped to the account that saved them. Only masked key metadata is returned to the frontend. Optional provider-specific HTTP headers can also be configured as a JSON object in Settings. They are encrypted at rest, never returned by the API, limited to 20 entries and 8,192 characters, and cannot override authentication or transport-critical headers. The feature is optional; use the standard local analysis workflows when external processing is not appropriate.
+
+## OpenCode Console compatibility
+
+OpenCode Console can be connected through InsightFlow AI's OpenAI-compatible protocol. Use a model that is available to external clients and configure the full Chat Completions endpoint:
+
+- Pay-as-you-go: \`https://opencode.ai/inference/openai/v1/chat/completions\`
+- OpenCode Go: \`https://opencode.ai/inference/go/openai/v1/chat/completions\`
+
+Enter the OpenCode Console API key as the provider API key and the model ID shown in the OpenCode model catalog. For OpenCode Go, add an \`x-opencode-session\` custom header with a stable session ID. InsightFlow AI forwards custom headers on both the planning and explanation requests.
+
+OpenCode documents that free-tier chat models are only available from within OpenCode; external clients need paid models or Go. Some model families use different native APIs, but the Console can translate text models between its supported API families. The OpenAI Chat Completions endpoint above is the compatible route used by InsightFlow AI.
+
+## Optional live provider smoke tests
+
+The normal backend test suite uses mocked provider responses and does not require real API keys. To verify an actual provider account, an opt-in smoke-test module is available:
+
+```powershell
+$env:PYTHONPATH = "$PWD\backend"
+$env:INSIGHTFLOW_LIVE_PROVIDER_TESTS = "1"
+# Set only the variables for the provider you want to test in this local shell:
+# INSIGHTFLOW_LIVE_OPENAI_API_KEY, INSIGHTFLOW_LIVE_OPENAI_BASE_URL, INSIGHTFLOW_LIVE_OPENAI_MODEL
+# INSIGHTFLOW_LIVE_GEMINI_API_KEY, INSIGHTFLOW_LIVE_GEMINI_MODEL
+# INSIGHTFLOW_LIVE_ANTHROPIC_API_KEY, INSIGHTFLOW_LIVE_ANTHROPIC_MODEL
+python -m pytest backend\tests\test_live_provider_smoke.py -q
+```
+
+For OpenAI-compatible providers, the base URL is the provider API base (the test appends `/chat/completions` unless the full endpoint is already supplied). Gemini and Anthropic use their default official API base URLs unless the corresponding `*_BASE_URL` variable is set. Optional OpenAI-compatible custom headers can be supplied as JSON in `INSIGHTFLOW_LIVE_PROVIDER_HEADERS`.
+
+These tests are skipped by default and make real billable or quota-consuming requests when enabled. Configure secrets only in your own local environment; never commit them, paste them into issues, or share terminal output containing them. Run one provider test at a time if you want to limit usage.
 
 ## Security considerations
 
@@ -234,7 +263,7 @@ The project includes:
 - Database schema migrations.
 - Automated backend tests and frontend build checks.
 
-Authentication is being introduced in phases. Until backend authorization is applied to every private API route, records and model artifacts are owner-scoped, and cross-account isolation tests pass, do not expose the application publicly or treat it as a secure multi-user deployment. Rate limiting, HTTPS, secret management, database backups, logging, monitoring, and production-specific upload/storage controls are also required.
+Private dataset, history, registry, machine-learning, and AI-provider operations require JWT authentication. Account passwords are hashed with Argon2; access tokens are short-lived; saved provider credentials and custom headers are encrypted at rest; and user-owned records and model artifacts are scoped to the authenticated account. Login and registration are rate-limited. Production mode fails closed when shared Redis rate limiting is missing or unavailable. The root and health endpoints are intentionally public. These controls are application-level safeguards, not a substitute for an independent security assessment. Before public production use, configure HTTPS, strong stable secrets, exact CORS origins, managed PostgreSQL, reachable Redis, database backups, monitoring and alerting, persistent storage for model artifacts, and hosting-level request/body limits. Verify migrations and recovery procedures against the actual production services; production deployment has not been validated by the repository CI workflow.
 
 ## Repository structure
 

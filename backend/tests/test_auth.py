@@ -126,3 +126,161 @@ def test_auth_rejects_non_bearer_authorization_scheme(api_client, monkeypatch):
         headers={"Authorization": "Basic dXNlcjpwYXNz"},
     )
     assert response.status_code == 401
+
+
+
+def test_login_rate_limit_returns_429_and_retry_after(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    responses = [
+        api_client(
+            "POST",
+            "/api/v1/auth/login",
+            json={"email": "missing@example.com", "password": "incorrect-password-value"},
+        )
+        for _ in range(5)
+    ]
+    assert all(response.status_code == 401 for response in responses)
+
+    limited = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_registration_rate_limit_blocks_excessive_attempts(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    for index in range(3):
+        response = api_client(
+            "POST",
+            "/api/v1/auth/register",
+            json={
+                "email": f"rate-limit-{index}@example.com",
+                "password": "correct-horse-battery-staple",
+            },
+        )
+        assert response.status_code == 201
+
+    limited = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "rate-limit-extra@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert limited.status_code == 429
+    assert int(limited.headers["Retry-After"]) > 0
+
+
+def test_auth_rejects_placeholder_jwt_secret(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "change-me")
+    response = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "placeholder@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert response.status_code == 503
+
+
+def test_production_auth_requires_shared_rate_limiter(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("INSIGHTFLOW_ENV", "production")
+    monkeypatch.delenv("REDIS_URL", raising=False)
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 503
+    assert "REDIS_URL" in response.json()["detail"]
+
+
+def test_redis_rate_limiter_uses_shared_atomic_script(api_client, monkeypatch):
+    import app.auth as auth_module
+
+    class FakeRedis:
+        def __init__(self):
+            self.calls = []
+
+        def eval(self, *args):
+            self.calls.append(args)
+            return [1, 0]
+
+    fake_redis = FakeRedis()
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setenv("INSIGHTFLOW_ENV", "production")
+    monkeypatch.setattr(auth_module, "_redis_client", fake_redis)
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 401
+    assert len(fake_redis.calls) == 1
+    assert fake_redis.calls[0][1] == 1
+    assert "insightflow:auth-rate-limit:login:" in fake_redis.calls[0][2]
+
+
+def test_redis_rate_limiter_returns_retry_after_when_blocked(api_client, monkeypatch):
+    import app.auth as auth_module
+
+    class BlockingRedis:
+        def eval(self, *args):
+            return [0, 42]
+
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setattr(auth_module, "_redis_client", BlockingRedis())
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 429
+    assert response.headers["Retry-After"] == "42"
+
+
+def test_redis_rate_limiter_fails_closed_when_store_is_unavailable(api_client, monkeypatch):
+    import app.auth as auth_module
+    import redis
+
+    class BrokenRedis:
+        def eval(self, *args):
+            raise redis.ConnectionError("unavailable")
+
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379/0")
+    monkeypatch.setattr(auth_module, "_redis_client", BrokenRedis())
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 503
+    assert "temporarily unavailable" in response.json()["detail"]
+
+
+def test_redis_rate_limiter_fails_closed_for_invalid_url(api_client, monkeypatch):
+    import app.auth as auth_module
+
+    def invalid_redis_client():
+        raise ValueError("Invalid Redis URL")
+
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    monkeypatch.setenv("REDIS_URL", "not-a-valid-redis-url")
+    monkeypatch.setattr(auth_module, "_get_redis_client", invalid_redis_client)
+
+    response = api_client(
+        "POST",
+        "/api/v1/auth/login",
+        json={"email": "missing@example.com", "password": "incorrect-password-value"},
+    )
+    assert response.status_code == 503
+    assert "temporarily unavailable" in response.json()["detail"]

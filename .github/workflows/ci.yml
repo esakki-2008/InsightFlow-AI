@@ -27,7 +27,7 @@ jobs:
       - name: Run backend tests
         env:
           PYTHONPATH: backend
-        run: python -m pytest backend/tests -v
+        run: python -m pytest backend/tests -v --ignore=backend/tests/test_live_provider_smoke.py
 
   frontend-build:
     name: Frontend production build

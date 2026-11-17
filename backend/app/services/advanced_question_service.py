@@ -2,16 +2,12 @@ from __future__ import annotations
 
 import json
 import re
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
-
 import numpy as np
 import pandas as pd
 
-from app.services.llm_provider_service import (
-    DEFAULT_NVIDIA_MODEL,
-    NVIDIA_CHAT_COMPLETIONS_URL,
-)
+from app.services.llm_provider_service import DEFAULT_NVIDIA_MODEL
+from app.services.openai_compatible_service import _post_json
+from app.services.native_provider_service import native_provider_chat
 
 
 ALLOWED_OPERATIONS = {
@@ -27,51 +23,58 @@ ALLOWED_OPERATIONS = {
 ALLOWED_AGGREGATIONS = {"mean", "median", "min", "max", "sum", "std"}
 
 
-def _nvidia_chat(api_key: str, model: str, messages: list[dict], max_tokens: int = 700) -> str:
-    payload = {
+def _provider_chat(
+    api_key: str,
+    model: str,
+    messages: list[dict],
+    base_url: str,
+    max_tokens: int = 700,
+    protocol: str = "openai_compatible",
+    custom_headers: dict[str, str] | None = None,
+) -> str:
+    """Call the selected provider through its protocol adapter and pinned HTTPS transport."""
+    if protocol in {"native_gemini", "native_anthropic"}:
+        return native_provider_chat(
+            protocol=protocol,
+            api_key=api_key,
+            model=model,
+            messages=messages,
+            base_url=base_url,
+            max_tokens=max_tokens,
+            custom_headers=custom_headers,
+        )
+    if protocol != "openai_compatible":
+        raise ValueError("The selected AI provider protocol is not supported.")
+    endpoint = (base_url or "").strip().rstrip("/")
+    if not endpoint:
+        raise ValueError("The selected provider has no API base URL.")
+    from urllib.parse import urlsplit
+
+    parsed = urlsplit(endpoint)
+    if parsed.path.rstrip("/").endswith("/chat/completions"):
+        completion_url = endpoint
+    else:
+        completion_url = endpoint + "/chat/completions"
+
+    request_payload = {
         "model": model,
         "messages": messages,
         "temperature": 0.1,
         "top_p": 0.9,
         "max_tokens": max_tokens,
         "stream": False,
-        "chat_template_kwargs": {"enable_thinking": False},
     }
-    request = Request(
-        NVIDIA_CHAT_COMPLETIONS_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        },
-        method="POST",
-    )
-    try:
-        with urlopen(request, timeout=60) as response:
-            data = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        if exc.code in (401, 403):
-            raise ValueError("NVIDIA rejected the API key or account access.") from exc
-        if exc.code == 404:
-            raise ValueError("NVIDIA could not find the selected model.") from exc
-        if exc.code == 429:
-            raise ValueError("NVIDIA rate limit or quota reached. Try again shortly.") from exc
-        raise ValueError(f"NVIDIA API request failed with HTTP {exc.code}.") from exc
-    except (TimeoutError, URLError) as exc:
-        raise ValueError("Could not reach NVIDIA. Check your connection and try again.") from exc
-    except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-        raise ValueError("NVIDIA returned an invalid response.") from exc
-
+    data = (_post_json(completion_url, api_key, request_payload, custom_headers)
+            if custom_headers else _post_json(completion_url, api_key, request_payload))
     choices = data.get("choices") or []
-    if not choices:
-        raise ValueError("NVIDIA returned no completion choices.")
+    if not choices or not isinstance(choices[0], dict):
+        raise ValueError("The selected provider returned no completion choices.")
     message = choices[0].get("message") or {}
     text = message.get("content")
     if not isinstance(text, str) or not text.strip():
         text = message.get("reasoning_content")
     if not isinstance(text, str) or not text.strip():
-        raise ValueError("NVIDIA returned an empty response. Try again.")
+        raise ValueError("The selected provider returned an empty response. Try again.")
     return text.strip()
 
 
@@ -257,15 +260,20 @@ def answer_advanced_dataset_question(
     question: str,
     api_key: str,
     model: str = DEFAULT_NVIDIA_MODEL,
+    base_url: str = "https://integrate.api.nvidia.com/v1",
+    provider_name: str = "NVIDIA",
+    protocol: str = "openai_compatible",
+    custom_headers: dict[str, str] | None = None,
 ) -> dict:
-    """Use an LLM to plan a query, validate it, calculate with Pandas, then explain results."""
+    """Use a selected OpenAI-compatible LLM to plan and explain validated local Pandas analysis."""
     key = (api_key or "").strip()
     selected_model = (model or DEFAULT_NVIDIA_MODEL).strip()
+    selected_provider = (provider_name or "AI provider").strip()[:80]
     prompt = (question or "").strip()
     if not key:
-        raise ValueError("Enter your NVIDIA API key to use Advanced AI mode.")
-    if len(key) > 512 or any(ch.isspace() for ch in key):
-        raise ValueError("The NVIDIA API key format is invalid.")
+        raise ValueError("Select a saved AI provider in Advanced AI mode.")
+    if len(key) > 4096 or any(ch.isspace() for ch in key):
+        raise ValueError("The saved API key format is invalid.")
     if not prompt or len(prompt) > 1000:
         raise ValueError("Enter a question between 1 and 1,000 characters.")
     if dataframe.empty:
@@ -304,10 +312,13 @@ def answer_advanced_dataset_question(
     # a planner from silently answering with an overall aggregate instead.
     plan = _infer_group_comparison_plan(frame, prompt)
     if plan is None:
-        plan_text = _nvidia_chat(
+        plan_text = _provider_chat(
             key, selected_model,
             [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}],
+            base_url=base_url,
             max_tokens=500,
+            protocol=protocol,
+            custom_headers=custom_headers,
         )
         plan = _extract_json(plan_text)
     result = _validate_and_execute(frame, plan)
@@ -317,13 +328,16 @@ def answer_advanced_dataset_question(
         "Use only the supplied result; do not invent facts or claim causation. "
         "Mention limitations when relevant. Return plain text, no markdown table."
     )
-    explanation = _nvidia_chat(
+    explanation = _provider_chat(
         key, selected_model,
         [
             {"role": "system", "content": explanation_prompt},
             {"role": "user", "content": json.dumps({"question": prompt, "computed_result": result}, ensure_ascii=False)},
         ],
+        base_url=base_url,
         max_tokens=350,
+        protocol=protocol,
+        custom_headers=custom_headers,
     )
     return {
         "question": prompt,
@@ -331,8 +345,8 @@ def answer_advanced_dataset_question(
         "query_type": result["operation"],
         "result": result,
         "rows_analyzed": int(len(frame)),
-        "provider": "NVIDIA",
+        "provider": selected_provider,
         "model": selected_model,
         "execution": "validated_pandas_operation",
-        "privacy_note": "Dataset rows are processed locally. NVIDIA receives the dataset column names and inferred types plus your question for query planning, then receives the question and computed analysis result (such as aggregates, counts, or correlations) to generate the explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing these details with NVIDIA.",
+        "privacy_note": f"Dataset rows are processed locally. {selected_provider} receives the dataset column names and inferred types plus your question for query planning, then receives the question and computed analysis result (such as aggregates, counts, or correlations) to generate the explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing these details with {selected_provider}.",
     }

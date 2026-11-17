@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from io import BytesIO
 import os
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from alembic import command
 from alembic.config import Config
@@ -15,7 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.auth import router as auth_router, get_current_user
-from app.models import User
+from app.ai_credentials import router as ai_credentials_router, _decrypt_custom_headers
+from app.models import AIProviderCredential, User
 from app import models  # Register SQLAlchemy models before table creation.
 from app.history_schemas import HistoryCreate
 from app.models import AnalysisHistory
@@ -38,6 +40,7 @@ from app.services.insights_service import generate_dataset_insights
 from app.services.question_service import answer_dataset_question
 from app.services.question_suggestion_service import generate_question_suggestions
 from app.services.llm_provider_service import test_nvidia_connection
+from app.services.credential_crypto_service import decrypt_api_key
 from app.services.advanced_question_service import answer_advanced_dataset_question
 
 
@@ -62,6 +65,7 @@ app = FastAPI(
 )
 
 app.include_router(auth_router)
+app.include_router(ai_credentials_router)
 
 
 @app.middleware("http")
@@ -79,13 +83,37 @@ async def add_security_headers(request, call_next):
 
 
 def get_allowed_origins() -> list[str]:
-    """Read explicitly trusted browser origins from the environment."""
+    """Read and validate explicit browser origins from the environment."""
     configured = os.getenv("BACKEND_CORS_ORIGINS", "").strip()
-    if configured:
-        return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    if not configured:
+        # Local development defaults only; production must set this variable.
+        return ["http://localhost:5173", "http://127.0.0.1:5173"]
 
-    # Local development defaults only; production deployments should set BACKEND_CORS_ORIGINS.
-    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+    origins = [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
+    if not origins:
+        raise RuntimeError("BACKEND_CORS_ORIGINS must contain at least one trusted origin.")
+
+    for origin in origins:
+        parsed = urlsplit(origin)
+        if (
+            "*" in origin
+            or parsed.scheme not in {"http", "https"}
+            or not parsed.netloc
+            or parsed.path
+            or parsed.query
+            or parsed.fragment
+            or parsed.username
+            or parsed.password
+        ):
+            raise RuntimeError(
+                "Invalid BACKEND_CORS_ORIGINS entry. Use exact origins such as https://app.example.com."
+            )
+        hostname = (parsed.hostname or "").lower()
+        is_localhost = hostname in {"localhost", "127.0.0.1", "::1"}
+        if parsed.scheme != "https" and not is_localhost:
+            raise RuntimeError("Non-local production CORS origins must use HTTPS.")
+
+    return origins
 
 
 app.add_middleware(
@@ -493,15 +521,31 @@ async def suggest_dataset_questions_endpoint(file: UploadFile = File(...)):
         await file.close()
 
 
-@app.post("/api/v1/datasets/ask/advanced", dependencies=[Depends(get_current_user)])
+@app.post("/api/v1/datasets/ask/advanced")
 async def ask_dataset_question_advanced_endpoint(
     file: UploadFile = File(...),
     question: str = Form(...),
-    api_key: str = Form(...),
-    model: str = Form("nvidia/nemotron-3.5-lightning-30b-a3b"),
+    credential_id: str = Form(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Answer a dataset question using NVIDIA planning and validated local Pandas execution."""
+    """Answer a dataset question using this user's saved, encrypted AI provider credential."""
     try:
+        credential = (
+            db.query(AIProviderCredential)
+            .filter(
+                AIProviderCredential.id == credential_id,
+                AIProviderCredential.user_id == current_user.id,
+            )
+            .first()
+        )
+        if credential is None:
+            raise HTTPException(status_code=404, detail="Saved AI provider connection not found.")
+        if credential.protocol not in {"openai_compatible", "native_gemini", "native_anthropic"}:
+            raise HTTPException(status_code=400, detail="This provider protocol is not supported by Dataset Q&A.")
+        api_key = decrypt_api_key(credential.encrypted_api_key)
+        custom_headers = _decrypt_custom_headers(credential)
+
         filename = file.filename or "unknown"
         content = await file.read(10 * 1024 * 1024 + 1)
         inspect_dataset(filename=filename, content=content)
@@ -521,7 +565,11 @@ async def ask_dataset_question_advanced_endpoint(
             dataframe=dataframe,
             question=question,
             api_key=api_key,
-            model=model,
+            model=credential.model_id,
+            base_url=credential.base_url,
+            provider_name=credential.provider_name,
+            protocol=credential.protocol,
+            custom_headers=custom_headers,
         )
         return {
             "message": "Advanced AI dataset question answered successfully",
@@ -529,6 +577,8 @@ async def ask_dataset_question_advanced_endpoint(
             "qa": answer,
         }
 
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -743,6 +793,8 @@ async def predict_with_trained_model(
             "prediction": result,
         }
 
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -796,6 +848,8 @@ async def explain_saved_model_prediction(
             "explanation": explanation,
         }
 
+    except HTTPException:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -1037,7 +1091,7 @@ def get_analysis_history(history_id: str, db: Session = Depends(get_db), current
 @app.delete("/api/v1/history/{history_id}", dependencies=[Depends(get_current_user)])
 def delete_analysis_history(history_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Delete one saved analysis record."""
-    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id).first()
+    record = db.query(AnalysisHistory).filter(AnalysisHistory.id == history_id, AnalysisHistory.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Analysis history record not found.")
     db.delete(record)
@@ -1079,7 +1133,7 @@ def get_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), cu
 
 @app.delete("/api/v1/datasets/registry/{dataset_id}", dependencies=[Depends(get_current_user)])
 def delete_dataset_registry_item(dataset_id: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id).first()
+    record = db.query(models.DatasetRecord).filter(models.DatasetRecord.id == dataset_id, models.DatasetRecord.user_id == current_user.id).first()
     if record is None:
         raise HTTPException(status_code=404, detail="Dataset registry record not found.")
     db.delete(record)

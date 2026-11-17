@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   AlertCircle,
   ArrowLeft,
@@ -29,6 +29,16 @@ type QAResponse = {
 }
 
 type Props = { onBack: () => void }
+
+type SavedProvider = {
+  id: string
+  display_name: string
+  provider_name: string
+  protocol: 'openai_compatible'
+  base_url: string
+  model_id: string
+  key_hint: string
+}
 
 type SuggestionProfile = {
   rows: number
@@ -65,12 +75,39 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
   const [error, setError] = useState('')
   const [historyStatus, setHistoryStatus] = useState('')
   const [mode, setMode] = useState<'standard' | 'advanced'>('standard')
-  const [apiKey, setApiKey] = useState('')
-  const [model, setModel] = useState('nvidia/nemotron-3.5-lightning-30b-a3b')
+  const [providers, setProviders] = useState<SavedProvider[]>([])
+  const [selectedProviderId, setSelectedProviderId] = useState('')
+  const [providersLoading, setProvidersLoading] = useState(true)
+  const [providersError, setProvidersError] = useState('')
   const [suggestions, setSuggestions] = useState<string[]>([])
   const [suggestionProfile, setSuggestionProfile] = useState<SuggestionProfile | null>(null)
   const [suggestionsLoading, setSuggestionsLoading] = useState(false)
   const [suggestionsError, setSuggestionsError] = useState('')
+
+  const selectedProvider = providers.find((provider) => provider.id === selectedProviderId)
+
+  useEffect(() => {
+    let active = true
+    const loadProviders = async () => {
+      setProvidersLoading(true)
+      setProvidersError('')
+      try {
+        const response = await apiFetch(API_URL + '/api/v1/ai/credentials')
+        const payload = await response.json()
+        if (!response.ok) throw new Error(payload.detail || 'Unable to load saved AI providers.')
+        const items = (payload.items ?? []) as SavedProvider[]
+        if (!active) return
+        setProviders(items)
+        setSelectedProviderId((current) => items.some((item) => item.id === current) ? current : (items[0]?.id ?? ''))
+      } catch (err) {
+        if (active) setProvidersError(err instanceof Error ? err.message : 'Unable to load saved AI providers.')
+      } finally {
+        if (active) setProvidersLoading(false)
+      }
+    }
+    void loadProviders()
+    return () => { active = false }
+  }, [])
 
   const loadSuggestions = async (selectedFile: File) => {
     setSuggestionsLoading(true)
@@ -108,8 +145,8 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
       setError('Enter a question about your dataset.')
       return
     }
-    if (mode === 'advanced' && !apiKey.trim()) {
-      setError('Enter your NVIDIA API key to use Advanced AI mode.')
+    if (mode === 'advanced' && !selectedProviderId) {
+      setError('Connect an AI provider in Settings, then select it here.')
       return
     }
 
@@ -122,8 +159,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
       body.append('question', prompt)
       const endpoint = mode === 'advanced' ? '/api/v1/datasets/ask/advanced' : '/api/v1/datasets/ask'
       if (mode === 'advanced') {
-        body.append('api_key', apiKey.trim())
-        body.append('model', model)
+        body.append('credential_id', selectedProviderId)
       }
       const response = await apiFetch(API_URL + endpoint, { method: 'POST', body })
       const payload = await response.json()
@@ -148,7 +184,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
               query_type: data.qa.query_type,
               rows_analyzed: data.qa.rows_analyzed,
               provider: data.qa.provider ?? (mode === 'standard' ? 'InsightFlow' : null),
-              model: data.qa.model ?? (mode === 'standard' ? 'Standard Pandas' : model),
+              model: data.qa.model ?? (mode === 'standard' ? 'Standard Pandas' : (selectedProvider?.model_id ?? 'Saved provider')),
               structured_result: data.qa.result,
             },
             notes: 'Automatically saved after successful dataset question answering. Raw dataset rows and API keys are not stored.',
@@ -211,14 +247,14 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
             <div>
               <p className="text-xs font-semibold tracking-[2px] text-violet-300">DATASET QUESTION ANSWERING</p>
               <h2 className="mt-2 text-2xl font-bold tracking-tight sm:text-3xl">Talk to your data.</h2>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Upload a dataset and ask questions in plain English. Standard mode uses deterministic operations; Advanced AI uses NVIDIA to plan and explain validated Pandas analysis.</p>
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-zinc-400">Upload a dataset and ask questions in plain English. Standard mode uses deterministic operations; Advanced AI uses your selected saved provider to plan and explain validated Pandas analysis.</p>
             </div>
           </div>
         </section>
 
         <section className="rounded-2xl border border-white/[0.07] bg-[#11111b] p-6">
           <h3 className="font-semibold">Choose analysis mode</h3>
-          <p className="mt-1 text-xs text-zinc-500">Use Standard without a key, or enable Advanced AI with your NVIDIA API key.</p>
+          <p className="mt-1 text-xs text-zinc-500">Use Standard without an API key, or select one of your securely saved providers for Advanced AI.</p>
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <button type="button" disabled={loading} onClick={() => { setMode('standard'); setError('') }} className={mode === 'standard' ? 'rounded-xl border border-violet-500/50 bg-violet-500/10 p-4 text-left' : 'rounded-xl border border-white/10 bg-black/10 p-4 text-left'}>
               <span className="block text-sm font-semibold text-white">Standard Mode</span>
@@ -232,18 +268,18 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
           {mode === 'advanced' && (
             <div className="mt-5 space-y-4 rounded-xl border border-fuchsia-500/20 bg-fuchsia-500/[0.04] p-4">
               <div>
-                <label htmlFor="nvidia-model" className="mb-2 block text-sm font-medium text-zinc-300">NVIDIA model</label>
-                <select id="nvidia-model" value={model} onChange={(event) => setModel(event.target.value)} disabled={loading} className="w-full rounded-xl border border-white/10 bg-[#09090f] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-500/50">
-                  <option value="nvidia/nemotron-3.5-lightning-30b-a3b">Nemotron 3.5 Lightning 30B</option>
+                <label htmlFor="saved-ai-provider" className="mb-2 block text-sm font-medium text-zinc-300">Saved AI provider</label>
+                <select id="saved-ai-provider" value={selectedProviderId} onChange={(event) => setSelectedProviderId(event.target.value)} disabled={loading || providersLoading || providers.length === 0} className="w-full rounded-xl border border-white/10 bg-[#09090f] px-3 py-3 text-sm text-white outline-none focus:border-fuchsia-500/50 disabled:opacity-50">
+                  {providers.length === 0 && <option value="">No saved providers</option>}
+                  {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.display_name} — {provider.provider_name} / {provider.model_id}</option>)}
                 </select>
-              </div>
-              <div>
-                <label htmlFor="nvidia-api-key" className="mb-2 block text-sm font-medium text-zinc-300">NVIDIA API key</label>
-                <input id="nvidia-api-key" type="password" autoComplete="off" value={apiKey} onChange={(event) => setApiKey(event.target.value)} disabled={loading} placeholder="Paste your NVIDIA API key" className="w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-fuchsia-500/50" />
-                <p className="mt-2 text-xs leading-5 text-zinc-500">Your key stays temporarily in this page's memory. It is not saved to localStorage, sessionStorage, or the backend database. It is cleared when you leave this workspace or reload the page.</p>
+                {providersLoading && <p className="mt-2 text-xs text-zinc-500">Loading your saved providers...</p>}
+                {providersError && <p className="mt-2 text-xs text-rose-300">{providersError}</p>}
+                {!providersLoading && providers.length === 0 && <p className="mt-2 text-xs leading-5 text-amber-200/80">No saved providers found. Return to the dashboard, open Settings, and add a provider first. Your API key will not be requested here.</p>}
+                {selectedProvider && <p className="mt-2 text-xs text-zinc-500">Using {selectedProvider.provider_name} · {selectedProvider.model_id} · key {selectedProvider.key_hint}</p>}
               </div>
               <div className="rounded-lg border border-amber-500/20 bg-amber-500/[0.05] p-3 text-xs leading-5 text-amber-200/80">
-                NVIDIA trial requests may be retained by NVIDIA for service improvement and security. The app sends dataset schema for planning and computed results for explanation; raw dataset rows are processed locally and are not sent by this workflow. Avoid sensitive datasets.
+                Dataset rows are processed locally. The selected provider receives column names and inferred types for query planning, then the question and computed result for explanation. Do not use Advanced AI with sensitive data unless you are comfortable sharing those details with that provider.
               </div>
             </div>
           )}

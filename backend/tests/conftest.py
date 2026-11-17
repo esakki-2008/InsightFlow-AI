@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.database import Base, get_db
 from app import models  # noqa: F401 - ensure all test tables are registered
 from app.main import app
+from app.auth import reset_auth_rate_limits
 
 
 @pytest.fixture
@@ -25,6 +26,7 @@ def api_client():
         autocommit=False,
     )
     Base.metadata.create_all(bind=test_engine)
+    reset_auth_rate_limits()
 
     def override_get_db():
         session = TestingSessionLocal()
@@ -45,6 +47,8 @@ def api_client():
                 return await client.request(method, path, **kwargs)
 
         return asyncio.run(send())
+
+    request.session_factory = TestingSessionLocal
 
     try:
         yield request
