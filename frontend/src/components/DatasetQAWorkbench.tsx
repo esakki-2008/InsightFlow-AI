@@ -9,7 +9,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 type QAResult = {
   question: string
@@ -80,7 +80,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
     try {
       const body = new FormData()
       body.append('file', selectedFile)
-      const response = await fetch(API_URL + '/api/v1/datasets/suggest-questions', {
+      const response = await apiFetch(API_URL + '/api/v1/datasets/suggest-questions', {
         method: 'POST',
         body,
       })
@@ -125,7 +125,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
         body.append('api_key', apiKey.trim())
         body.append('model', model)
       }
-      const response = await fetch(API_URL + endpoint, { method: 'POST', body })
+      const response = await apiFetch(API_URL + endpoint, { method: 'POST', body })
       const payload = await response.json()
       if (!response.ok) {
         throw new Error(payload.detail || 'Unable to answer this question.')
@@ -134,7 +134,7 @@ export default function DatasetQAWorkbench({ onBack }: Props) {
       setHistory((current) => [data.qa, ...current])
       setQuestion(prompt)
       try {
-        const historyResponse = await fetch(API_URL + '/api/v1/history', {
+        const historyResponse = await apiFetch(API_URL + '/api/v1/history', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

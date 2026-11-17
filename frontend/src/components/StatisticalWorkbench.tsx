@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, AlertCircle, FileSpreadsheet, Loader2, UploadCloud, Activity, Sigma } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 type Statistics = {
   overview: { numeric_features_analyzed: number; correlation_pairs_analyzed: number; group_comparisons_analyzed: number }
   distributions: { column: string; count: number; mean: number; median: number; std_dev: number; min: number; q1: number; q3: number; max: number; skewness: number | null; kurtosis: number | null; normality_test: { test: string; statistic: number; p_value: number; interpretation: string } | null }[]
@@ -24,13 +24,13 @@ export default function StatisticalWorkbench({ onBack }: { onBack: () => void })
     setBusy(true); setError(''); setHistoryStatus(''); setData(null)
     try {
       const form = new FormData(); form.append('file', file)
-      const response = await fetch(`${API_URL}/api/v1/datasets/statistics`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/statistics`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Statistical analysis failed.')
       const statistics = result.statistics as Statistics
       setData(statistics)
       try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

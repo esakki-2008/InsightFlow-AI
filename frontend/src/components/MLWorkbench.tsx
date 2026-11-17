@@ -14,7 +14,7 @@ import {
   Upload,
 } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 type ModelResult = {
   model: string
@@ -176,13 +176,13 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       body.append('target_column', targetColumn.trim())
       body.append('test_size', testSize)
       body.append('random_state', randomState)
-      const response = await fetch(`${API_URL}/api/v1/ml/train`, { method: 'POST', body })
+      const response = await apiFetch(`${API_URL}/api/v1/ml/train`, { method: 'POST', body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Model training failed.')
       const generated = result as TrainingResponse
       setTrainingResult(generated)
       try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -238,13 +238,13 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       body.append('file', predictionFile)
       body.append('model_id', trainingResult.training.model_id)
       body.append('model_name', selectedModel)
-      const response = await fetch(`${API_URL}/api/v1/ml/predict`, { method: 'POST', body })
+      const response = await apiFetch(`${API_URL}/api/v1/ml/predict`, { method: 'POST', body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Prediction failed.')
       const generated = result as PredictionResponse
       setPredictionResult(generated)
       try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -302,7 +302,7 @@ export default function MLWorkbench({ onBack }: { onBack: () => void }) {
       body.append('model_id', predictionResult.prediction.model_id)
       body.append('model_name', predictionResult.prediction.model_name)
       body.append('row_index', String(selectedRow - 1))
-      const response = await fetch(`${API_URL}/api/v1/ml/explain`, { method: 'POST', body })
+      const response = await apiFetch(`${API_URL}/api/v1/ml/explain`, { method: 'POST', body })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Could not explain this prediction.')
       setExplanationResult(result as ExplanationResponse)

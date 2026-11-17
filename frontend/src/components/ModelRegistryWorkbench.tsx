@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ArrowLeft, BrainCircuit, RefreshCw, Search, AlertCircle, CheckCircle2, Database, CalendarDays } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 interface ModelMetric {
   model: string
@@ -51,7 +51,7 @@ export default function ModelRegistryWorkbench({ onBack }: Props) {
 
   const loadModels = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/ml/models`)
+      const response = await apiFetch(`${API_URL}/api/v1/ml/models`)
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to load the model registry.')
       setError('')

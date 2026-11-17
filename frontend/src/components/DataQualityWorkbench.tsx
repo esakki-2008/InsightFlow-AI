@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { ArrowLeft, AlertCircle, CheckCircle2, FileSpreadsheet, Loader2, ShieldCheck, UploadCloud, AlertTriangle, Info } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 type ColumnProfile = {
   name: string
@@ -47,14 +47,14 @@ export default function DataQualityWorkbench({ onBack }: { onBack: () => void })
     try {
       const form = new FormData()
       form.append('file', file)
-      const response = await fetch(`${API_URL}/api/v1/datasets/quality`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/quality`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Unable to generate the report.')
       const qualityReport = result.report as QualityReport
       setReport(qualityReport)
       setFilename(result.filename)
       try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

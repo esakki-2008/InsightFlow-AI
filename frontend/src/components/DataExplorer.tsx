@@ -17,7 +17,7 @@ import {
   X,
 } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 type Row = Record<string, unknown>
 type NumericStat = { count: number; mean: number | null; median: number | null; std: number | null; min: number | null; max: number | null }
 type CategoryItem = { value: string; count: number }
@@ -74,7 +74,7 @@ export default function DataExplorer({ onBack }: { onBack: () => void }) {
       form.append('page', String(nextPage))
       form.append('page_size', '25')
       form.append('search', nextSearch)
-      const response = await fetch(`${API_URL}/api/v1/datasets/explore`, { method: 'POST', body: form })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/explore`, { method: 'POST', body: form })
       const result = await response.json()
       if (!response.ok) throw new Error(result.detail || 'Dataset exploration failed.')
       const payload = result as ExploreResponse

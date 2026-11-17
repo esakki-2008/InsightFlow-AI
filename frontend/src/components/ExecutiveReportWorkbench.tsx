@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, FileSpreadsheet, FileText, Loader2, AlertCircle, Sparkles, Download, ShieldCheck, Printer } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 type Finding = { area: string; priority: string; title: string; detail: string; recommendation: string }
 type Report = {
   filename: string
@@ -25,13 +25,13 @@ export default function ExecutiveReportWorkbench({ onBack }: { onBack: () => voi
     setBusy(true); setError(''); setHistoryStatus(''); setReport(null)
     try {
       const body = new FormData(); body.append('file', file)
-      const response = await fetch(`${API_URL}/api/v1/datasets/executive-report`, { method: 'POST', body })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/executive-report`, { method: 'POST', body })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to generate the report.')
       const generatedReport = payload.report as Report
       setReport(generatedReport)
       try {
-        const historyResponse = await fetch(`${API_URL}/api/v1/history`, {
+        const historyResponse = await apiFetch(`${API_URL}/api/v1/history`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

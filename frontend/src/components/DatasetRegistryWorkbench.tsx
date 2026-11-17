@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { ArrowLeft, Database, FileSpreadsheet, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 
-import { API_URL } from '../config/api'
+import { API_URL, apiFetch } from '../config/api'
 
 type DatasetRecord = {
   id: string
@@ -27,7 +27,7 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
 
   const loadRegistry = useCallback(async () => {
     try {
-      const response = await fetch(`${API_URL}/api/v1/datasets/registry?limit=50&offset=0`)
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/registry?limit=50&offset=0`)
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to load dataset registry.')
       setError('')
@@ -48,7 +48,7 @@ export default function DatasetRegistryWorkbench({ onBack }: { onBack: () => voi
   const deleteRecord = async (id: string) => {
     if (!window.confirm('Delete this dataset metadata record? The original file is not stored here and will not be affected.')) return
     try {
-      const response = await fetch(`${API_URL}/api/v1/datasets/registry/${id}`, { method: 'DELETE' })
+      const response = await apiFetch(`${API_URL}/api/v1/datasets/registry/${id}`, { method: 'DELETE' })
       const payload = await response.json()
       if (!response.ok) throw new Error(payload.detail || 'Unable to delete registry record.')
       if (selected?.id === id) setSelected(null)
