@@ -331,3 +331,61 @@ This project is licensed under the [MIT License](./LICENSE).
 <p align="center">
   Built to make data analysis more accessible, understandable, and actionable.
 </p>
+
+## Application Screenshots
+
+### Screenshot 2026-11-17 174636
+
+![Screenshot 2026-11-17 174636](docs/screenshots/Screenshot%202026-11-17%20174636.png)
+
+### Screenshot 2026-11-17 174649
+
+![Screenshot 2026-11-17 174649](docs/screenshots/Screenshot%202026-11-17%20174649.png)
+
+### Screenshot 2026-11-17 174727
+
+![Screenshot 2026-11-17 174727](docs/screenshots/Screenshot%202026-11-17%20174727.png)
+
+### Screenshot 2026-11-17 174744
+
+![Screenshot 2026-11-17 174744](docs/screenshots/Screenshot%202026-11-17%20174744.png)
+
+### Screenshot 2026-11-17 174807
+
+![Screenshot 2026-11-17 174807](docs/screenshots/Screenshot%202026-11-17%20174807.png)
+
+### Screenshot 2026-11-17 174831
+
+![Screenshot 2026-11-17 174831](docs/screenshots/Screenshot%202026-11-17%20174831.png)
+
+### Screenshot 2026-11-17 174849
+
+![Screenshot 2026-11-17 174849](docs/screenshots/Screenshot%202026-11-17%20174849.png)
+
+### Screenshot 2026-11-17 174925
+
+![Screenshot 2026-11-17 174925](docs/screenshots/Screenshot%202026-11-17%20174925.png)
+
+### Screenshot 2026-11-17 174946
+
+![Screenshot 2026-11-17 174946](docs/screenshots/Screenshot%202026-11-17%20174946.png)
+
+### Screenshot 2026-11-17 175012
+
+![Screenshot 2026-11-17 175012](docs/screenshots/Screenshot%202026-11-17%20175012.png)
+
+### Screenshot 2026-11-17 175038
+
+![Screenshot 2026-11-17 175038](docs/screenshots/Screenshot%202026-11-17%20175038.png)
+
+### Screenshot 2026-11-17 175057
+
+![Screenshot 2026-11-17 175057](docs/screenshots/Screenshot%202026-11-17%20175057.png)
+
+### Screenshot 2026-11-17 175119
+
+![Screenshot 2026-11-17 175119](docs/screenshots/Screenshot%202026-11-17%20175119.png)
+
+### Screenshot 2026-11-17 175137
+
+![Screenshot 2026-11-17 175137](docs/screenshots/Screenshot%202026-11-17%20175137.png)
