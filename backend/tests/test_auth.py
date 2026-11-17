@@ -57,3 +57,72 @@ def test_auth_requires_strong_jwt_secret(api_client, monkeypatch):
         json={"email": "nobody@example.com", "password": "correct-horse-battery-staple"},
     )
     assert response.status_code == 503
+
+
+def test_registration_rejects_invalid_email_and_short_password(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+
+    invalid_email = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "not-an-email", "password": "correct-horse-battery-staple"},
+    )
+    assert invalid_email.status_code == 422
+
+    short_password = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "valid@example.com", "password": "short"},
+    )
+    assert short_password.status_code == 422
+
+
+def test_auth_rejects_expired_and_tampered_tokens(api_client, monkeypatch):
+    from datetime import datetime, timedelta, timezone
+
+    import jwt
+
+    secret = "test-secret-that-is-at-least-32-characters-long"
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", secret)
+
+    now = datetime.now(timezone.utc)
+    expired_token = jwt.encode(
+        {
+            "sub": "00000000-0000-0000-0000-000000000001",
+            "iss": "insightflow-ai",
+            "iat": now - timedelta(hours=1),
+            "exp": now - timedelta(minutes=1),
+        },
+        secret,
+        algorithm="HS256",
+    )
+    expired = api_client(
+        "GET",
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {expired_token}"},
+    )
+    assert expired.status_code == 401
+
+    created = api_client(
+        "POST",
+        "/api/v1/auth/register",
+        json={"email": "token@example.com", "password": "correct-horse-battery-staple"},
+    )
+    assert created.status_code == 201
+    token = created.json()["access_token"]
+    tampered = api_client(
+        "GET",
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {token}tampered"},
+    )
+    assert tampered.status_code == 401
+
+
+def test_auth_rejects_non_bearer_authorization_scheme(api_client, monkeypatch):
+    monkeypatch.setenv("INSIGHTFLOW_JWT_SECRET", "test-secret-that-is-at-least-32-characters-long")
+    response = api_client(
+        "GET",
+        "/api/v1/auth/me",
+        headers={"Authorization": "Basic dXNlcjpwYXNz"},
+    )
+    assert response.status_code == 401
