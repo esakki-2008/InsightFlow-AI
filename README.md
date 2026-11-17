@@ -393,3 +393,11 @@ This project is licensed under the [MIT License](./LICENSE).
 ### Screenshot 2026-11-17 175137
 
 ![Screenshot 2026-11-17 175137](docs/screenshots/Screenshot%202026-11-17%20175137.png)
+
+---
+
+## Author
+
+**Esakki Raja Salaikumar**
+
+[GitHub Profile](https://github.com/esakki-2008)
